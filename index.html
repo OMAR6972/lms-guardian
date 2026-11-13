@@ -91,8 +91,9 @@ input[type=text],input[type=password],input[type=search]{width:100%;padding:10px
 
     <section id="t-people" class="tabbody" style="display:none;gap:12px">
       <div id="people" style="display:grid;gap:12px"></div>
-      <div><button id="addPerson">+ Add person</button></div>
-      <p class="mute">Add a person, press <b>Save</b>, then send them their invite link. They open it in Telegram and tap Start. They only receive the subjects you tick for them.</p>
+      <div class="row"><button id="addPerson">+ Add person (Telegram)</button><button id="addChannel"># Add Discord channel</button></div>
+      <p class="mute"><b>Telegram person:</b> add them, press Save, then send their invite link. They open it and tap Start.<br>
+      <b>Discord channel:</b> in the server go to Server Settings → Integrations → Webhooks → New Webhook, pick the channel, copy the link and paste it here. Add as many channels and servers as you like; each one only gets the subjects you tick for it. Discord channels can't answer commands, they only receive alerts.</p>
     </section>
 
     <section id="t-activity" class="tabbody" style="display:none;gap:12px">
@@ -233,7 +234,7 @@ function renderSubjects() {
     return (!q || (c.code + " " + c.name).toLowerCase().indexOf(q) >= 0) && (!only || anyFollows(c.id));
   }).map(function (c) {
     var chips = people().map(function (p, i) {
-      return '<button class="chip' + (p.active === false ? " off" : "") + '" data-c="' + c.id + '" data-p="' + i + '" aria-pressed="' + follows(p, c.id) + '">' + esc(p.name || "?") + "</button>";
+      return '<button class="chip' + (p.active === false ? " off" : "") + '" data-c="' + c.id + '" data-p="' + i + '" aria-pressed="' + follows(p, c.id) + '">' + ("discord" in p ? "# " : "") + esc(p.name || "?") + "</button>";
     }).join("");
     return '<div class="card cs"><div class="ct"><span class="code">' + esc(c.code) + '</span><span class="mute">' + esc(c.name) + '</span></div><div class="chips">' + chips + "</div></div>";
   }).join("") || '<div class="card mute">Nothing matches.</div>';
@@ -243,18 +244,26 @@ function link(p) {
   var bot = S.state && S.state.bot;
   return bot && p.invite ? "https://t.me/" + bot + "?start=" + p.invite : "";
 }
+var HOOK = /^https:\/\/(?:(?:canary|ptb)\.)?(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/;
 function renderPeople() {
   var chats = (S.state && S.state.chats) || {};
   $("people").innerHTML = people().map(function (p, i) {
-    var on = !!chats[p.id], l = link(p);
-    var invite = p.owner ? "" :
-      '<div class="row"><span class="badge ' + (on ? "ok" : "wait") + '">' + (on ? "connected on Telegram" : "waiting for them to tap the link") + "</span>" +
-      (l ? '<button data-copy="' + i + '">Copy invite link</button><a href="https://wa.me/?text=' + encodeURIComponent("Get LMS alerts here: " + l) + '" target="_blank" rel="noopener"><button>Send on WhatsApp</button></a>'
-         : '<span class="mute">Invite link appears after the bot\'s first run.</span>') + "</div>";
+    var isD = "discord" in p, n = (p.courses || []).length, extra = "";
+    if (isD) {
+      var okHook = HOOK.test(p.discord || "");
+      extra = '<label class="mute">Discord webhook link<input type="password" data-hook="' + i + '" value="' + esc(p.discord || "") + '" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"></label>' +
+        '<div class="row"><span class="badge ' + (okHook ? "ok" : "wait") + '">' + (okHook ? "link looks valid" : "paste a webhook link") + "</span></div>";
+    } else if (!p.owner) {
+      var on = !!chats[p.id], l = link(p);
+      extra = '<div class="row"><span class="badge ' + (on ? "ok" : "wait") + '">' + (on ? "connected on Telegram" : "waiting for them to tap the link") + "</span>" +
+        (l ? '<button data-copy="' + i + '">Copy invite link</button><a href="https://wa.me/?text=' + encodeURIComponent("Get LMS alerts here: " + l) + '" target="_blank" rel="noopener"><button>Send on WhatsApp</button></a>'
+           : '<span class="mute">Invite link appears after the bot\'s first run.</span>') + "</div>";
+    }
     var rm = p.owner ? "" : '<button class="link danger" data-rm="' + i + '">' + (S.armed === i ? "Tap again to remove" : "Remove") + "</button>";
+    var kind = p.owner ? "You (owner)" : isD ? "Discord channel" : "Telegram";
     return '<div class="card"><div class="row between"><input type="text" data-name="' + i + '" value="' + esc(p.name) + '" style="max-width:280px">' +
       '<label class="sw"><input type="checkbox" data-act="' + i + '"' + (p.active !== false ? " checked" : "") + "> Active</label></div>" +
-      '<p class="mute">' + (p.owner ? "You (owner)" : "Follows " + (p.courses || []).length + " subjects") + (p.owner ? " · follows " + (p.courses || []).length + " subjects" : "") + "</p>" + invite + rm + "</div>";
+      '<p class="mute">' + kind + " · follows " + n + " subject" + (n === 1 ? "" : "s") + "</p>" + extra + rm + "</div>";
   }).join("");
 }
 
@@ -298,11 +307,17 @@ $("people").onclick = function (e) {
 $("people").oninput = function (e) {
   var t = e.target;
   if (t.dataset.name !== undefined) { people()[+t.dataset.name].name = t.value; dirty(); }
+  else if (t.dataset.hook !== undefined) { people()[+t.dataset.hook].discord = t.value.trim(); dirty(); }
 };
 $("people").onchange = function (e) {
   var t = e.target;
   if (t.dataset.act !== undefined) { people()[+t.dataset.act].active = t.checked; dirty(); renderAll(); }
   else if (t.dataset.name !== undefined) { renderSubjects(); }
+  else if (t.dataset.hook !== undefined) { renderPeople(); }
+};
+$("addChannel").onclick = function () {
+  people().push({ id: "d" + rid(3), name: "Discord channel", active: true, discord: "", courses: [] });
+  dirty(); renderAll();
 };
 $("addPerson").onclick = function () {
   people().push({ id: "p" + rid(3), name: "New person", active: true, invite: rid(12), courses: [] });

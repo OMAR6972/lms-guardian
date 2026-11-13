@@ -1,6 +1,7 @@
 import os
 import sys
 
+from .discord import Discord
 from .engine import Engine
 from .moodle import Moodle
 from .telegram import Telegram
@@ -18,7 +19,7 @@ def main():
     m = Moodle(os.environ.get("LMS_BASE", DEFAULT_BASE), os.environ["LMS_USER"], os.environ["LMS_PASS"])
     tg = Telegram(os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"])
     try:
-        eng = Engine(m, tg, key=os.environ["DATA_KEY"])
+        eng = Engine(m, tg, key=os.environ["DATA_KEY"], dc=Discord())
     except VaultError as e:
         print(f"stopping: {e}")
         return 1

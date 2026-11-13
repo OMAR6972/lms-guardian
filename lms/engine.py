@@ -1,22 +1,24 @@
-"""One monitoring run: sync Telegram, crawl Moodle, diff, notify the right people, persist.
+"""One monitoring run: sync Telegram, crawl Moodle, diff, notify the right people/channels, persist.
 
 Data lives in two ENCRYPTED files (see vault.py):
-  config.enc  what the panel edits: people and which subjects each person follows
-  state.enc   what the bot remembers: snapshots, history, who is connected on Telegram, Moodle token
+  config.enc  what the panel edits: recipients (Telegram people, Discord channels) and their subjects
+  state.enc   what the bot remembers: snapshots, history, Telegram connections, Moodle token
+A recipient with a "discord" key is a Discord channel (webhook link); otherwise it is a Telegram person.
 """
 import os
 import time
 
 from . import diff, snapshot, vault
+from .discord import Discord, DiscordError, valid_webhook
 from .moodle import LoginError, MoodleError
 from .telegram import TgError
-from .util import NetError, chunk_blocks, esc, fmt_delta, fmt_ts, split_course
+from .util import NetError, chunk_blocks, esc, fmt_delta, fmt_ts, html_to_md, split_course
 
 HISTORY_MAX = 200
 RECENT_DAYS = 60  # first run only: pre-select subjects opened within this many days
 
 HELP = (
-    "<b>LMS Guardian</b>\n"
+    "<b>LMS Guardian</b>\n\n"
     "/courses – your subjects\n"
     "/upcoming – deadlines and quizzes coming up\n"
     "/history – latest detected changes\n"
@@ -35,8 +37,9 @@ def render_event(e):
 
 
 class Engine:
-    def __init__(self, moodle, tg, root=".", key="", now=None, log=print):
+    def __init__(self, moodle, tg, root=".", key="", now=None, log=print, dc=None):
         self.m, self.tg, self.log, self.key = moodle, tg, log, key
+        self.dc = dc or Discord()
         self.cfg_path = os.path.join(root, "config.enc")
         self.st_path = os.path.join(root, "state.enc")
         self.cfg, self._cfg_prev = vault.load(self.cfg_path, key, None)
@@ -57,46 +60,69 @@ class Engine:
             vault.save_if_changed(self.cfg_path, self.cfg, self.key, self._cfg_prev)
         vault.save_if_changed(self.st_path, self.st, self.key, self._st_prev)
 
-    # ---------- people ----------
+    # ---------- recipients ----------
     def people(self):
         return (self.cfg or {}).get("people", [])
 
     def owner(self):
-        for p in self.people():
-            if p.get("owner"):
-                return p
-        return None
+        return next((p for p in self.people() if p.get("owner")), None)
 
     def active_people(self):
         return [p for p in self.people() if p.get("active", True)]
 
+    def mine(self, p):
+        return {int(c) for c in p.get("courses", [])}
+
     def tracked(self):
         out = set()
         for p in self.active_people():
-            out |= {int(c) for c in p.get("courses", [])}
+            out |= self.mine(p)
         return out
+
+    @staticmethod
+    def is_discord(p):
+        return "discord" in p
+
+    def connected(self, p):
+        if self.is_discord(p):
+            return valid_webhook(p.get("discord"))
+        return bool(self.st["chats"].get(p["id"]))
 
     def person_for_chat(self, chat):
         for pid, c in self.st["chats"].items():
             if str(c) == str(chat):
-                return next((p for p in self.people() if p["id"] == pid), None)
+                return next((p for p in self.people() if p["id"] == pid and not self.is_discord(p)), None)
         return None
 
-    def label(self, cid):
+    # ---------- naming ----------
+    def full(self, cid):
         info = self.st["course_info"].get(str(cid))
-        return f"{info['code']} · {info['name']}" if info else f"course {cid}"
+        return f"{info['code']} — {info['name']}" if info else f"course {cid}"
+
+    def bullets(self, cids):
+        return "\n".join(f"• {esc(self.full(c))}" for c in cids)
 
     # ---------- sending ----------
-    def say_to(self, pid, text):
-        chat = self.st["chats"].get(pid)
-        if not chat:
-            return None  # not connected on Telegram yet
+    def deliver(self, p, html_text):
+        """True = sent, False = failed, None = recipient not connected."""
         try:
-            self.tg.send(text, chat_id=chat)
+            if self.is_discord(p):
+                if not valid_webhook(p.get("discord")):
+                    return None
+                self.dc.send(p["discord"], html_to_md(html_text))
+            else:
+                chat = self.st["chats"].get(p["id"])
+                if not chat:
+                    return None
+                self.tg.send(html_text, chat_id=chat)
             return True
-        except TgError as e:
-            self.log(f"telegram send failed: {e}")
+        except (TgError, DiscordError) as e:
+            self.log(f"send to {'discord' if self.is_discord(p) else 'telegram'} failed: {e}")
             return False
+
+    def say_to(self, pid, html_text):
+        p = next((p for p in self.people() if p["id"] == pid), None)
+        return self.deliver(p, html_text) if p else None
 
     def reply(self, chat, text):
         try:
@@ -104,7 +130,7 @@ class Engine:
         except TgError as e:
             self.log(f"telegram reply failed: {e}")
 
-    # ---------- commands ----------
+    # ---------- commands (Telegram only; Discord webhooks are one-way) ----------
     def handle_updates(self):
         try:
             updates = self.tg.get_updates(self.st["offset"])
@@ -128,15 +154,15 @@ class Engine:
             return
         cmd, args = parts[0].split("@")[0].lower(), parts[1:]
         if cmd == "/start" and args:
-            p = next((p for p in self.people() if p.get("invite") == args[0]), None)
+            p = next((p for p in self.people() if p.get("invite") == args[0] and not self.is_discord(p)), None)
             if not p:
                 return self.reply(chat, "That invite link isn't valid any more. Ask for a new one.")
             self.st["chats"][p["id"]] = chat
             n = len(p.get("courses", []))
-            self.reply(chat, f"✅ Connected, {esc(p['name'])}. You follow {n} subject{'s' if n != 1 else ''}. Try /courses.")
+            self.reply(chat, f"✅ <b>Connected, {esc(p['name'])}.</b>\nYou follow {n} subject{'s' if n != 1 else ''}. Try /courses.")
             owner = self.owner()
             if owner and owner["id"] != p["id"]:
-                self.say_to(owner["id"], f"👤 {esc(p['name'])} just connected.")
+                self.say_to(owner["id"], f"👤 <b>{esc(p['name'])}</b> just connected.")
             return
         p = self.person_for_chat(chat)
         if not p:
@@ -152,16 +178,14 @@ class Engine:
         elif cmd == "/history":
             self.reply(chat, self.text_history(p))
 
-    def mine(self, p):
-        return {int(c) for c in p.get("courses", [])}
-
     def text_courses(self, p):
-        names = [self.label(c) for c in sorted(self.mine(p))]
-        return "<b>Your subjects</b>\n" + ("\n".join("• " + esc(n) for n in names) if names else "None selected yet (use the panel).")
+        cids = sorted(self.mine(p), key=lambda c: self.full(c))
+        return "<b>Your subjects</b>\n\n" + (self.bullets(cids) if cids else "None selected yet (use the panel).")
 
     def text_status(self, p):
         h = [x for x in self.st["history"] if x.get("cid") in self.mine(p)]
-        lines = ["<b>Status</b>: running ✅", f"You follow {len(self.mine(p))} subjects",
+        lines = ["<b>Status</b>: running ✅", "",
+                 f"Following {len(self.mine(p))} subject{'s' if len(self.mine(p)) != 1 else ''}",
                  f"Last change: {esc(fmt_ts(h[-1]['t']))}" if h else "No changes detected yet"]
         if self.st.get("fail_streak"):
             lines.append(f"⚠️ {self.st['fail_streak']} failed checks in a row")
@@ -173,24 +197,25 @@ class Engine:
             snap = self.st["courses"].get(str(cid))
             if not snap:
                 continue
-            code = self.st["course_info"].get(str(cid), {}).get("code", cid)
             for a in snap["assigns"].values():
                 if a["due"] > self.now:
-                    items.append((a["due"], f"📝 {code}: {a['name']} — due {fmt_ts(a['due'])}"))
+                    items.append((a["due"], "📝", a["name"], "Due", cid))
             for q in snap["quizzes"].values():
                 if q["close"] > self.now:
-                    items.append((q["close"], f"❓ {code}: {q['name']} — closes {fmt_ts(q['close'])}"))
+                    items.append((q["close"], "❓", q["name"], "Closes", cid))
         items.sort()
         if not items:
             return "Nothing due soon in your subjects."
-        return "<b>Upcoming</b>\n" + "\n".join(f"{esc(t)} (in {fmt_delta(ts - self.now)})" for ts, t in items[:20])
+        blocks = [f"{icon} <b>{esc(name)}</b>\n   {esc(self.full(cid))}\n   {word} {esc(fmt_ts(ts))} · in {fmt_delta(ts - self.now)}"
+                  for ts, icon, name, word, cid in items[:15]]
+        return "<b>Upcoming</b>\n\n" + "\n\n".join(blocks)
 
     def text_history(self, p):
-        h = [x for x in self.st["history"] if x.get("cid") in self.mine(p)][-15:]
+        h = [x for x in self.st["history"] if x.get("cid") in self.mine(p)][-10:]
         if not h:
             return "No changes detected yet."
-        return "<b>Latest changes</b>\n" + "\n".join(
-            f"{esc(fmt_ts(x['t']))} · {esc(x['course'])} · {esc(x['text'])}" for x in reversed(h))
+        blocks = [f"<b>{esc(x['text'])}</b>\n   {esc(self.full(x['cid']))}\n   {esc(fmt_ts(x['t']))}" for x in reversed(h)]
+        return "<b>Latest changes</b>\n\n" + "\n\n".join(blocks)
 
     # ---------- the run ----------
     def connect(self):
@@ -217,7 +242,6 @@ class Engine:
         self.cfg = {"people": [{"id": "me", "name": "Me", "owner": True, "active": True,
                                 "courses": sorted(self.recent)}]}
         self.log(f"created first config with {len(self.recent)} subjects")
-        return True
 
     def run(self):
         try:
@@ -240,10 +264,11 @@ class Engine:
         if self.cfg is not None:
             self.handle_updates()
         if first_config and self.logged_in:
-            self.say_to("me", "✅ <b>LMS Guardian is live.</b> I picked the "
-                        f"{len(self.mine(self.owner()))} subjects you opened recently and recorded their current "
-                        "state silently, so you'll only get <i>new</i> changes from now on.\n"
-                        "Open the panel to change subjects or add people.")
+            n = len(self.mine(self.owner()))
+            self.say_to("me", "✅ <b>LMS Guardian is live.</b>\n\n"
+                        f"I picked {n} subject{'s' if n != 1 else ''} you opened recently and recorded "
+                        "their current state silently, so you'll only get <i>new</i> changes from now on.\n\n"
+                        "Open the panel to change subjects or add people and Discord channels.")
         if self.logged_in and self.cfg is not None:
             self.crawl()
         self.update_health()
@@ -258,13 +283,11 @@ class Engine:
         items = sum(len(s["modules"]) + len(s["assigns"]) + len(s["quizzes"]) for s in snaps.values())
         posts = sum(len(s["disc"]) for s in snaps.values())
         self.log(f"checked {len(snaps)}/{len(on)} subjects: {items} items, {posts} forum posts, {len(failed)} failed")
-        newly = []
         for cid, new in snaps.items():
             key = str(cid)
             old = self.st["courses"].get(key)
             if old is None:
                 self.st["courses"][key] = new
-                newly.append(cid)
                 continue
             events = diff.diff_course(old, new)
             if events and not self.notify(cid, events):
@@ -273,27 +296,28 @@ class Engine:
         self.announce_subscriptions()
 
     def announce_subscriptions(self):
-        """Tell each person about subjects that just became theirs (silent baseline) and remember them."""
+        """Tell each recipient about subjects that just became theirs (silent baseline) and remember them."""
         for p in self.active_people():
             now_mine = {c for c in self.mine(p) if str(c) in self.st["courses"]}
             seen = set(self.st["sub"].get(p["id"], []))
-            new = sorted(now_mine - seen)
-            if new and (self.st["chats"].get(p["id"])):
-                codes = ", ".join(self.st["course_info"][str(c)]["code"] for c in new)
-                self.say_to(p["id"], f"📌 Now following: {esc(codes)}. You'll get changes from now on.")
-            if self.st["chats"].get(p["id"]) or not new:
+            new = sorted(now_mine - seen, key=lambda c: self.full(c))
+            if new and self.connected(p):
+                ok = self.deliver(p, "📌 <b>Now following</b>\n\n" + self.bullets(new) +
+                                  "\n\nYou'll get changes from now on.")
+                if ok is False:
+                    continue  # retry next run
+            if self.connected(p) or not new:
                 self.st["sub"][p["id"]] = sorted(now_mine)
 
     def notify(self, cid, events):
-        header = f"<b>{esc(self.label(cid))}</b>"
+        header = f"<b>{esc(self.full(cid))}</b>"
         texts = chunk_blocks(header, [render_event(e) for e in events])
         recipients = [p for p in self.active_people() if cid in self.mine(p)]
         owner_ids = {p["id"] for p in recipients if p.get("owner")}
         results = {}
         for p in recipients:
-            if self.st["chats"].get(p["id"]) and self.st["sub"].get(p["id"]) is not None \
-                    and str(cid) in map(str, self.st["sub"].get(p["id"], [])):
-                results[p["id"]] = all(self.say_to(p["id"], t) for t in texts)
+            if self.connected(p) and cid in {int(c) for c in self.st["sub"].get(p["id"], [])}:
+                results[p["id"]] = all([self.deliver(p, t) for t in texts])
         critical = [results[i] for i in (owner_ids or results) if i in results]
         ok = all(critical)
         if ok:
@@ -310,10 +334,10 @@ class Engine:
             self.st["fail_streak"] += 1
             if self.st["fail_streak"] >= 3 and not self.st.get("warned") and owner:
                 reason = esc(self.error or "every subject failed to load")
-                if self.say_to(owner["id"], f"⚠️ <b>Monitoring is interrupted</b> ({self.st['fail_streak']} failed checks in a row).\n{reason}"):
+                if self.say_to(owner["id"], f"⚠️ <b>Monitoring is interrupted</b>\n\n{self.st['fail_streak']} failed checks in a row.\n{reason}"):
                     self.st["warned"] = True
         else:
             if self.st.get("warned") and owner:
-                self.say_to(owner["id"], "✅ Monitoring is working again.")
+                self.say_to(owner["id"], "✅ <b>Monitoring is working again.</b>")
             self.st["fail_streak"] = 0
             self.st["warned"] = False

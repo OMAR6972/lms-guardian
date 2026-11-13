@@ -109,3 +109,34 @@ def split_course(fullname):
     if m:
         return m.group(1), m.group(2)
     return (fullname or "?")[:12], fullname or "?"
+
+
+_MD_SPECIAL = re.compile(r"([\\*_~`|>\[\]])")
+
+
+def md_escape(text):
+    text = _MD_SPECIAL.sub(r"\\\1", text)
+    return re.sub(r"(?m)^(#+\s|-\s)", r"\\\1", text)
+
+
+def html_to_md(s):
+    """Convert the small HTML subset used for Telegram (<b>, <i>, <a href>) into Discord markdown."""
+    out, href = [], ""
+    for tok in re.split(r"(<[^>]+>)", s):
+        if not tok:
+            continue
+        if tok.startswith("<"):
+            t = tok.lower()
+            if t in ("<b>", "</b>"):
+                out.append("**")
+            elif t in ("<i>", "</i>"):
+                out.append("*")
+            elif t.startswith("<a "):
+                m = re.search(r'href="([^"]*)"', tok)
+                href = html.unescape(m.group(1)).replace(")", "%29") if m else ""
+                out.append("[")
+            elif t == "</a>":
+                out.append(f"]({href})")
+        else:
+            out.append(md_escape(html.unescape(tok)))
+    return "".join(out)

@@ -4,10 +4,11 @@ from datetime import datetime, timezone
 import pytest
 
 from lms import vault
+from lms.discord import DiscordError, valid_webhook
 from lms.engine import Engine
 from lms.moodle import LoginError, MoodleError
 from lms.telegram import TgError
-from lms.util import chunk_blocks, fmt_delta, fmt_ts, split_course
+from lms.util import chunk_blocks, fmt_delta, fmt_ts, html_to_md, split_course
 
 NOW = 1_800_000_000
 OWNER_CHAT = "42"
@@ -37,6 +38,23 @@ class FakeTelegram:
 
     def texts(self, chat=None):
         return "\n".join(t for c, t in self.sent if chat is None or c == str(chat))
+
+
+class FakeDiscord:
+    def __init__(self):
+        self.sent, self.fail = [], set()
+
+    def send(self, url, markdown):
+        if url in self.fail:
+            raise DiscordError("HTTP 500")
+        self.sent.append((url, markdown))
+
+    def texts(self, url):
+        return "\n".join(m for u, m in self.sent if u == url)
+
+
+HOOK_A = "https://discord.com/api/webhooks/111111111/aaaa-AAAA_1"
+HOOK_B = "https://discord.com/api/webhooks/222222222/bbbb-BBBB_2"
 
 
 class FakeMoodle:
@@ -85,8 +103,8 @@ class FakeMoodle:
         raise AssertionError(fn)
 
 
-def run(tmp_path, m, tg, now=NOW):
-    e = Engine(m, tg, root=str(tmp_path), key=KEY, now=now, log=lambda *_: None)
+def run(tmp_path, m, tg, now=NOW, dc=None):
+    e = Engine(m, tg, root=str(tmp_path), key=KEY, now=now, log=lambda *_: None, dc=dc or FakeDiscord())
     try:
         e.run()
     finally:
@@ -137,7 +155,7 @@ def test_first_run_bootstraps_encrypted_files_silently(tmp_path):
     assert "CSE333s" not in raw and "Assignment" not in raw and "tok" not in raw  # nothing readable on disk
     assert state(tmp_path)["bot"] == "lms_test_bot"
     txt = tg.texts(OWNER_CHAT)
-    assert "LMS Guardian is live" in txt and "Now following: CSE333s" in txt
+    assert "LMS Guardian is live" in txt and "Now following" in txt and "• CSE333s — Data Structures and Algorithms" in txt
     assert "New file" not in txt
 
 
@@ -231,7 +249,7 @@ def test_people_invites_and_per_person_subjects(tmp_path):
     run(tmp_path, m, tg)
     assert state(tmp_path)["chats"]["f1"] == "777"
     assert "Connected, Yousef" in tg.texts(777) and "just connected" in tg.texts(OWNER_CHAT)
-    assert "Now following: CSE334s" in tg.texts(777)
+    assert "Now following" in tg.texts(777) and "• CSE334s — Database Systems" in tg.texts(777)
     run(tmp_path, m, tg)
     tg.sent.clear()
     m.assigns[1][0]["duedate"] += 3600           # course 1 change: owner only
@@ -278,7 +296,7 @@ def test_commands(tmp_path):
                 for i, c in enumerate(["/status", "/upcoming", "/history", "/courses", "/start"], 1)]
     run(tmp_path, m, tg, now=n)
     txt = tg.texts(OWNER_CHAT)
-    assert "You follow 1 subjects" in txt and "Assignment 1" in txt and "in 10 days" in txt
+    assert "Following 1 subject" in txt and "Assignment 1" in txt and "in 10 days" in txt
     assert "No changes detected yet" in txt and "CSE333s" in txt and "/upcoming" in txt
 
 
@@ -312,3 +330,57 @@ def test_moodle_client_is_read_only():
     m = Moodle("https://x", "u", "p", post=lambda *a, **k: (200, "{}"))
     with pytest.raises(MoodleError):
         m.call("mod_assign_save_submission")
+
+
+def test_html_to_md_and_webhook_validation():
+    assert html_to_md('<b>A_B *x*</b> <a href="https://l.test/v?id=1&amp;x=2">Open</a>') == "**A\\_B \\*x\\***" + " [Open](https://l.test/v?id=1&x=2)"
+    assert valid_webhook(HOOK_A)
+    for bad in ("", "http://discord.com/api/webhooks/1/a", "https://evil.com/api/webhooks/1/a",
+                "https://discord.com.evil.com/api/webhooks/1/a", "https://discord.com/api/webhooks/1/a/extra",
+                "https://discord.com/api/webhooks/abc/a"):
+        assert not valid_webhook(bad)
+
+
+def test_discord_channels_follow_their_own_subjects(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)
+    c = cfg(tmp_path)
+    c["people"][0]["courses"] = [1, 2]
+    c["people"] += [
+        {"id": "dA", "name": "Class server", "active": True, "discord": HOOK_A, "courses": [1]},
+        {"id": "dB", "name": "Study group", "active": True, "discord": HOOK_B, "courses": [1, 2]},
+        {"id": "dC", "name": "Unfinished", "active": True, "discord": "not-a-link", "courses": [1]},
+    ]
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg, dc=dc)
+    assert "Now following" in dc.texts(HOOK_A) and "• CSE333s — Data Structures and Algorithms" in dc.texts(HOOK_A)
+    assert "CSE334s — Database Systems" in dc.texts(HOOK_B) and "CSE333s" in dc.texts(HOOK_B)
+    run(tmp_path, m, tg, dc=dc)
+    dc.sent.clear()
+    m.assigns[1][0]["duedate"] += 3600
+    m.contents[2][0]["modules"][0]["name"] = "Syllabus v2"
+    run(tmp_path, m, tg, dc=dc)
+    a, b = dc.texts(HOOK_A), dc.texts(HOOK_B)
+    assert "**CSE333s — Data Structures and Algorithms**" in a and "Assignment changed" in a
+    assert "[Open in Moodle](https://lms.test/mod/assign/view.php?id=12)" in a
+    assert "Syllabus v2" not in a and "Syllabus v2" in b and "Assignment changed" in b
+    assert all(u in (HOOK_A, HOOK_B) for u, _ in dc.sent)  # the invalid link was never contacted
+    assert "Syllabus v2" in tg.texts(OWNER_CHAT)
+
+
+def test_discord_failure_does_not_block_owner_or_crash(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)
+    c = cfg(tmp_path)
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1]})
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg, dc=dc)
+    run(tmp_path, m, tg, dc=dc)
+    tg.sent.clear()
+    dc.fail = {HOOK_A}
+    m.assigns[1][0]["duedate"] += 3600
+    run(tmp_path, m, tg, dc=dc)
+    assert "Assignment changed" in tg.texts(OWNER_CHAT)
+    tg.sent.clear()
+    run(tmp_path, m, tg, dc=dc)
+    assert tg.sent == []  # owner already notified; no duplicates

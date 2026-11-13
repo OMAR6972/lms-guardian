@@ -1,0 +1,46 @@
+name: LMS Guardian
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"   # fallback only; the Cloudflare Worker is the real clock (every 2 minutes)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lms-guardian
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      # ref: main = newest saved memory even when this run waited behind another one.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Check Moodle and notify
+        env:
+          LMS_USER: ${{ secrets.LMS_USER }}
+          LMS_PASS: ${{ secrets.LMS_PASS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DATA_KEY: ${{ secrets.DATA_KEY }}
+        run: python -m lms
+      - name: Save what the bot remembers
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -n "$(git status --porcelain config.enc state.enc)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add config.enc state.enc
+            git commit -m "chore: bot memory"
+            for i in 1 2 3; do git pull --rebase -X theirs && git push && break; sleep 3; done
+          fi

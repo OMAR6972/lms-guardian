@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LMS Guardian</title>
+<style>
+:root{
+  --bg:#eef5fc;--panel:#ffffff;--panel2:#e6f0fb;--fg:#10243a;--mute:#5a7088;--line:#d5e3f3;
+  --acc:#2f80d6;--acc-fg:#ffffff;--ok:#16803c;--bad:#c23b3b;--warn:#a86a00;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;
+  --acc:#6db4f5;--acc-fg:#06223e;--ok:#5fd68f;--bad:#ff9a92;--warn:#f0b455}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--font);
+  padding:max(18px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 120px max(16px,env(safe-area-inset-left))}
+main{max-width:880px;margin:0 auto;display:grid;gap:16px}
+[hidden]{display:none!important}
+h1,h2{margin:0;letter-spacing:-.02em}
+h1{font-size:1.8rem}h2{font-size:1.15rem}
+p{margin:0}.mute{color:var(--mute);font-size:.92rem}
+button,input{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:8px 14px;cursor:pointer;font-weight:500;min-height:42px}
+button:hover{border-color:var(--mute)}
+button.primary{background:var(--acc);color:var(--acc-fg);border-color:var(--acc);font-weight:700}
+button.link{background:none;border:0;color:var(--acc);padding:4px 8px;min-height:0}
+button.danger{color:var(--bad)}
+a{color:inherit;text-decoration:none}
+input[type=text],input[type=password],input[type=search]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel);min-height:44px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{min-width:0}
+.between{justify-content:space-between}
+.pill{display:inline-flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:.88rem}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--mute)}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+.tabs{display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:5px;width:max-content;max-width:100%}
+.tabs button{border:0;background:none;min-height:40px}
+.tabs button[aria-pressed=true]{background:var(--acc);color:var(--acc-fg);font-weight:700}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px 16px;display:grid;gap:10px;box-shadow:0 1px 3px rgba(20,60,110,.06)}
+.cs .ct{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.cs .code{font-weight:700}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-height:36px;padding:5px 12px;border-radius:99px;font-size:.9rem;background:var(--panel);}
+.chip[aria-pressed=true]{background:var(--acc);color:var(--acc-fg);border-color:var(--acc);font-weight:700}
+.chip.off{opacity:.5}
+.sw{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+.sw input{width:20px;height:20px;accent-color:var(--acc)}
+.badge{font-size:.78rem;border-radius:99px;padding:2px 10px;border:1px solid var(--line)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}.badge.wait{color:var(--warn);border-color:var(--warn)}
+.act{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.92rem}
+.act time{color:var(--mute);white-space:nowrap}
+#bar{position:fixed;left:0;right:0;bottom:0;padding:10px max(16px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--line)}
+#bar .in{max-width:880px;margin:0 auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.msg{font-size:.9rem;color:var(--mute)}.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<main>
+  <div class="row between">
+    <div><h1>LMS Guardian</h1><p class="mute">Choose which subjects each person is alerted about.</p></div>
+    <span class="pill" id="status"><span class="dot"></span><span id="statusText">checking…</span></span>
+  </div>
+
+  <section class="card" id="unlock" hidden>
+    <h2>Unlock</h2>
+    <p class="mute">Two keys, stored only in this browser. The GitHub key lets the panel save; the data passphrase decrypts your files (the same <b>DATA_KEY</b> you saved as a secret).</p>
+    <label>GitHub key (fine-grained token: this repo, Contents + Actions read &amp; write)<input type="password" id="tok" autocomplete="off"></label>
+    <label>Data passphrase<input type="password" id="pass" autocomplete="off"></label>
+    <div class="row"><button class="primary" id="go">Unlock</button><span class="msg" id="umsg"></span></div>
+  </section>
+
+  <div id="app" hidden>
+    <div class="row between">
+      <div class="tabs" role="tablist">
+        <button data-tab="subjects" aria-pressed="true">Subjects</button>
+        <button data-tab="people" aria-pressed="false">People</button>
+        <button data-tab="activity" aria-pressed="false">Activity</button>
+      </div>
+      <button class="link" id="forget">Forget keys</button>
+    </div>
+
+    <section id="t-subjects" class="tabbody" style="display:grid;gap:12px">
+      <div class="row">
+        <input type="search" id="q" placeholder="Search subjects" style="flex:1">
+        <label class="sw"><input type="checkbox" id="onlySel"> Followed only</label>
+      </div>
+      <p class="mute" id="subCount"></p>
+      <div id="subjects" style="display:grid;gap:10px"></div>
+    </section>
+
+    <section id="t-people" class="tabbody" style="display:none;gap:12px">
+      <div id="people" style="display:grid;gap:12px"></div>
+      <div><button id="addPerson">+ Add person</button></div>
+      <p class="mute">Add a person, press <b>Save</b>, then send them their invite link. They open it in Telegram and tap Start. They only receive the subjects you tick for them.</p>
+    </section>
+
+    <section id="t-activity" class="tabbody" style="display:none;gap:12px">
+      <div class="card"><div class="act" id="activity"></div></div>
+    </section>
+  </div>
+</main>
+
+<div id="bar" hidden><div class="in">
+  <button class="primary" id="saveRun">Save &amp; check now</button>
+  <button id="save">Save only</button>
+  <span class="msg" id="msg"></span>
+</div></div>
+
+<script>
+"use strict";
+var OWNER = "", REPO = "";
+(function () {
+  var m = location.hostname.match(/^(.+)\.github\.io$/);
+  if (m) { OWNER = m[1]; REPO = location.pathname.split("/")[1] || ""; }
+  var q = new URLSearchParams(location.search).get("repo");
+  if (q) { var p = q.split("/"); OWNER = p[0]; REPO = p[1]; }
+})();
+var API = "https://api.github.com/repos/" + OWNER + "/" + REPO;
+var WORKFLOW = "lms-guardian.yml";
+var $ = function (id) { return document.getElementById(id); };
+var S = { cfg: null, sha: null, state: null, dirty: false, armed: null };
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k) || ""; if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { return ""; } return ""; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function say(t, k) { var m = $("msg"); m.textContent = t; m.className = "msg" + (k ? " " + k : ""); }
+function rid(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
+function dirty() { S.dirty = true; say("You have unsaved changes."); }
+window.addEventListener("beforeunload", function (e) { if (S.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------- crypto (matches lms/vault.py) ---------- */
+function b64d(s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
+function b64e(u) { var s = ""; u.forEach(function (b) { s += String.fromCharCode(b); }); return btoa(s); }
+function deriveKey(pass, salt, usage) {
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]).then(function (base) {
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 200000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, [usage]);
+  });
+}
+function decrypt(text, pass) {
+  var d = JSON.parse(text);
+  return deriveKey(pass, b64d(d.salt), "decrypt").then(function (k) {
+    return crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(d.iv) }, k, b64d(d.ct));
+  }).then(function (pt) { return JSON.parse(new TextDecoder().decode(pt)); })
+    .catch(function () { throw new Error("Wrong data passphrase."); });
+}
+function encrypt(obj, pass) {
+  var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  return deriveKey(pass, salt, "encrypt").then(function (k) {
+    return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, k, new TextEncoder().encode(JSON.stringify(obj)));
+  }).then(function (ct) { return JSON.stringify({ v: 1, salt: b64e(salt), iv: b64e(iv), ct: b64e(new Uint8Array(ct)) }); });
+}
+
+/* ---------- GitHub ---------- */
+function gh(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({ Authorization: "Bearer " + store("lmsToken"), Accept: "application/vnd.github+json" }, opts.headers || {});
+  return fetch(API + path, opts).then(function (r) {
+    if (r.status === 401) throw new Error("GitHub did not accept the key.");
+    return r;
+  });
+}
+function utf8b64(s) { return btoa(unescape(encodeURIComponent(s))); }
+function loadConfig() {
+  return gh("/contents/config.enc?ref=main&_=" + Date.now()).then(function (r) {
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("GitHub said " + r.status);
+    return r.json();
+  });
+}
+function loadState() {
+  return gh("/contents/state.enc?ref=main&_=" + Date.now(), { headers: { Accept: "application/vnd.github.raw+json" } }).then(function (r) {
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("GitHub said " + r.status);
+    return r.text();
+  });
+}
+function putConfig() {
+  return encrypt(S.cfg, store("lmsPass")).then(function (enc) {
+    var body = JSON.stringify({ message: "Update subjects and people", content: utf8b64(enc + "\n"), sha: S.sha, branch: "main" });
+    return gh("/contents/config.enc", { method: "PUT", body: body }).then(function (r) {
+      if (r.status === 409 || r.status === 422) {  // someone committed in between: take the new sha and retry once
+        return loadConfig().then(function (cur) {
+          S.sha = cur.sha;
+          return gh("/contents/config.enc", { method: "PUT", body: JSON.stringify({ message: "Update subjects and people", content: utf8b64(enc + "\n"), sha: S.sha, branch: "main" }) });
+        });
+      }
+      return r;
+    });
+  }).then(function (r) {
+    if (!r.ok) throw new Error("GitHub said " + r.status + " while saving");
+    return r.json();
+  }).then(function (j) { S.sha = j.content.sha; S.dirty = false; });
+}
+function dispatch() {
+  return gh("/actions/workflows/" + WORKFLOW + "/dispatches", { method: "POST", body: JSON.stringify({ ref: "main" }) })
+    .then(function (r) { if (r.status !== 204) throw new Error("Could not start a check (" + r.status + ")"); });
+}
+
+/* ---------- status pill ---------- */
+function ago(iso) {
+  var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return "just now";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  if (s < 129600) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " d ago";
+}
+function loadStatus() {
+  gh("/actions/workflows/" + WORKFLOW + "/runs?per_page=1&_=" + Date.now()).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    var run = j && j.workflow_runs && j.workflow_runs[0], dot = document.querySelector("#status .dot");
+    if (!run) { $("statusText").textContent = "no runs yet"; return; }
+    var ok = run.status !== "completed" || run.conclusion === "success";
+    dot.className = "dot " + (ok ? "ok" : "bad");
+    $("statusText").textContent = run.status !== "completed" ? "checking now" : (ok ? "last check " : "last check failed ") + ago(run.updated_at);
+  }).catch(function () { $("statusText").textContent = "status unavailable"; });
+}
+
+/* ---------- rendering ---------- */
+function people() { return S.cfg.people; }
+function courses() {
+  var ci = (S.state && S.state.course_info) || {};
+  return Object.keys(ci).map(function (id) { return { id: +id, code: ci[id].code, name: ci[id].name }; })
+    .sort(function (a, b) { return a.code < b.code ? -1 : a.code > b.code ? 1 : 0; });
+}
+function follows(p, id) { return (p.courses || []).indexOf(id) >= 0; }
+function anyFollows(id) { return people().some(function (p) { return p.active !== false && follows(p, id); }); }
+
+function renderSubjects() {
+  var q = $("q").value.trim().toLowerCase(), only = $("onlySel").checked, list = courses();
+  if (!list.length) { $("subjects").innerHTML = '<div class="card mute">No subjects yet. The bot lists them after its first successful check.</div>'; $("subCount").textContent = ""; return; }
+  var n = list.filter(function (c) { return anyFollows(c.id); }).length;
+  $("subCount").textContent = n + " of " + list.length + " subjects followed";
+  $("subjects").innerHTML = list.filter(function (c) {
+    return (!q || (c.code + " " + c.name).toLowerCase().indexOf(q) >= 0) && (!only || anyFollows(c.id));
+  }).map(function (c) {
+    var chips = people().map(function (p, i) {
+      return '<button class="chip' + (p.active === false ? " off" : "") + '" data-c="' + c.id + '" data-p="' + i + '" aria-pressed="' + follows(p, c.id) + '">' + esc(p.name || "?") + "</button>";
+    }).join("");
+    return '<div class="card cs"><div class="ct"><span class="code">' + esc(c.code) + '</span><span class="mute">' + esc(c.name) + '</span></div><div class="chips">' + chips + "</div></div>";
+  }).join("") || '<div class="card mute">Nothing matches.</div>';
+}
+
+function link(p) {
+  var bot = S.state && S.state.bot;
+  return bot && p.invite ? "https://t.me/" + bot + "?start=" + p.invite : "";
+}
+function renderPeople() {
+  var chats = (S.state && S.state.chats) || {};
+  $("people").innerHTML = people().map(function (p, i) {
+    var on = !!chats[p.id], l = link(p);
+    var invite = p.owner ? "" :
+      '<div class="row"><span class="badge ' + (on ? "ok" : "wait") + '">' + (on ? "connected on Telegram" : "waiting for them to tap the link") + "</span>" +
+      (l ? '<button data-copy="' + i + '">Copy invite link</button><a href="https://wa.me/?text=' + encodeURIComponent("Get LMS alerts here: " + l) + '" target="_blank" rel="noopener"><button>Send on WhatsApp</button></a>'
+         : '<span class="mute">Invite link appears after the bot\'s first run.</span>') + "</div>";
+    var rm = p.owner ? "" : '<button class="link danger" data-rm="' + i + '">' + (S.armed === i ? "Tap again to remove" : "Remove") + "</button>";
+    return '<div class="card"><div class="row between"><input type="text" data-name="' + i + '" value="' + esc(p.name) + '" style="max-width:280px">' +
+      '<label class="sw"><input type="checkbox" data-act="' + i + '"' + (p.active !== false ? " checked" : "") + "> Active</label></div>" +
+      '<p class="mute">' + (p.owner ? "You (owner)" : "Follows " + (p.courses || []).length + " subjects") + (p.owner ? " · follows " + (p.courses || []).length + " subjects" : "") + "</p>" + invite + rm + "</div>";
+  }).join("");
+}
+
+function renderActivity() {
+  var h = ((S.state && S.state.history) || []).slice().reverse().slice(0, 60);
+  $("activity").innerHTML = h.length ? h.map(function (x) {
+    return "<time>" + new Date(x.t * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + "</time><span><b>" + esc(x.course) + "</b> · " + esc(x.text) + "</span>";
+  }).join("") : '<span class="mute">No changes detected yet.</span>';
+}
+function renderAll() { renderSubjects(); renderPeople(); renderActivity(); }
+
+/* ---------- events ---------- */
+document.querySelectorAll(".tabs button").forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll(".tabs button").forEach(function (x) { x.setAttribute("aria-pressed", x === b); });
+    document.querySelectorAll(".tabbody").forEach(function (t) { t.style.display = t.id === "t-" + b.dataset.tab ? "grid" : "none"; });
+  };
+});
+$("q").oninput = renderSubjects;
+$("onlySel").onchange = renderSubjects;
+$("subjects").onclick = function (e) {
+  var b = e.target.closest(".chip"); if (!b) return;
+  var p = people()[+b.dataset.p], id = +b.dataset.c, a = p.courses = p.courses || [];
+  var at = a.indexOf(id);
+  if (at >= 0) a.splice(at, 1); else a.push(id);
+  a.sort(function (x, y) { return x - y; });
+  dirty(); b.setAttribute("aria-pressed", at < 0);
+  var n = courses().filter(function (c) { return anyFollows(c.id); }).length;
+  $("subCount").textContent = n + " of " + courses().length + " subjects followed";
+};
+$("people").onclick = function (e) {
+  var t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.copy !== undefined) {
+    var l = link(people()[+t.dataset.copy]);
+    (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function () { say("Invite link copied. Remember to Save first.", "ok"); }, function () { prompt("Copy this link", l); });
+  } else if (t.dataset.rm !== undefined) {
+    var i = +t.dataset.rm;
+    if (S.armed === i) { people().splice(i, 1); S.armed = null; dirty(); renderAll(); } else { S.armed = i; renderPeople(); }
+  }
+};
+$("people").oninput = function (e) {
+  var t = e.target;
+  if (t.dataset.name !== undefined) { people()[+t.dataset.name].name = t.value; dirty(); }
+};
+$("people").onchange = function (e) {
+  var t = e.target;
+  if (t.dataset.act !== undefined) { people()[+t.dataset.act].active = t.checked; dirty(); renderAll(); }
+  else if (t.dataset.name !== undefined) { renderSubjects(); }
+};
+$("addPerson").onclick = function () {
+  people().push({ id: "p" + rid(3), name: "New person", active: true, invite: rid(12), courses: [] });
+  dirty(); renderAll();
+};
+function save(runAfter) {
+  say("Saving…");
+  putConfig().then(function () {
+    if (!runAfter) { say("Saved. The bot picks it up on its next check (within 2 minutes).", "ok"); return; }
+    return dispatch().then(function () { say("Saved. Checking now…", "ok"); setTimeout(loadStatus, 4000); });
+  }).catch(function (e) { say(e.message, "bad"); });
+}
+$("save").onclick = function () { save(false); };
+$("saveRun").onclick = function () { save(true); };
+$("forget").onclick = function () { store("lmsToken", ""); store("lmsPass", ""); location.reload(); };
+
+/* ---------- boot ---------- */
+function boot() {
+  var tok = store("lmsToken"), pass = store("lmsPass");
+  if (!OWNER || !REPO) { $("unlock").hidden = false; $("umsg").textContent = "Open this page from your GitHub Pages address."; return; }
+  if (!tok || !pass) { $("unlock").hidden = false; return; }
+  $("unlock").hidden = true;
+  Promise.all([loadConfig(), loadState()]).then(function (res) {
+    var cfgFile = res[0], stText = res[1];
+    if (!cfgFile) { $("app").hidden = true; $("unlock").hidden = false; $("umsg").textContent = "The bot hasn't created its files yet. Run it once from the Actions tab, then reload."; return; }
+    S.sha = cfgFile.sha;
+    var steps = [decrypt(atob(cfgFile.content.replace(/\n/g, "")), pass)];
+    if (stText) steps.push(decrypt(stText, pass));
+    return Promise.all(steps).then(function (out) {
+      S.cfg = out[0]; S.cfg.people = S.cfg.people || []; S.state = out[1] || null;
+      $("app").hidden = false; $("bar").hidden = false; renderAll(); loadStatus();
+    });
+  }).catch(function (e) {
+    store("lmsPass", ""); $("unlock").hidden = false; $("umsg").textContent = e.message;
+  });
+}
+$("go").onclick = function () {
+  store("lmsToken", $("tok").value.trim()); store("lmsPass", $("pass").value);
+  $("umsg").textContent = "Unlocking…"; boot();
+};
+boot();
+</script>
+</body>
+</html>

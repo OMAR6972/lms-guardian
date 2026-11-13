@@ -1,0 +1,16 @@
+{
+  "name": "lms-guardian-scheduler",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-01",
+  "observability": { "enabled": true },
+
+  // Every 2 minutes = 720 firings/day, far below the free plan's 100,000/day.
+  "triggers": { "crons": ["*/2 * * * *"] },
+
+  "vars": {
+    "GITHUB_REPO": "OMAR6972/lms-guardian",
+    "GITHUB_REF": "main"
+  }
+  // GITHUB_TOKEN is a secret: `npx wrangler secret put GITHUB_TOKEN`
+  // (fine-grained token, only this repo, permission Actions: Read and write)
+}

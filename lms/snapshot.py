@@ -73,6 +73,7 @@ def build(m, cids, old, log=print):
     forums, bad_f = batch("mod_forum_get_forums_by_courses", "forum")
     bad = bad_a | bad_q | bad_f
 
+    log(f"forums found: {sum(len(v) for v in forums.values())} in {len(forums)} subjects")
     for cid in live:
         if cid in bad:
             failed.add(cid)

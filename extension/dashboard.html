@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LMS Guardian</title>
+<style>
+:root{--bg:#eef5fc;--panel:#fff;--panel2:#e6f0fb;--fg:#10243a;--mute:#5a7088;--line:#d5e3f3;--acc:#2f80d6;--acc-fg:#fff;--bad:#c23b3b;--ok:#16803c}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--bad:#ff9a92;--ok:#5fd68f}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{width:420px;max-width:100%;min-height:520px;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:12px}
+[hidden]{display:none!important}
+h1{font-size:1.15rem;margin:0}
+.mute{color:var(--mute);font-size:.88rem}
+button,input,select{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:6px 11px;cursor:pointer}
+button.primary{background:var(--acc);color:var(--acc-fg);border-color:var(--acc);font-weight:700}
+button.link{background:none;border:0;color:var(--acc);padding:2px 4px}
+input,select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}
+.between{justify-content:space-between}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;margin:10px 0}
+.tabs button{border:0;background:none;flex:1;padding:6px 4px}
+.tabs button[aria-pressed=true]{background:var(--acc);color:var(--acc-fg);font-weight:700}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+.ev{display:grid;gap:2px;cursor:pointer}
+.ev.unread{border-left:4px solid var(--acc)}
+.ev .t{font-weight:600;overflow-wrap:anywhere}
+.ev a{color:var(--acc);text-decoration:none}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.filters input[type=search]{grid-column:1/-1}
+form{display:grid;gap:8px}
+.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="row between">
+  <h1>LMS Guardian</h1>
+  <span class="row"><span class="mute" id="count"></span><button class="link" id="markAll" hidden>Mark all read</button><button class="link" id="gear" title="Keys">⚙</button></span>
+</div>
+
+<form id="setup" class="card" hidden>
+  <p class="mute">Enter the same keys you use in the panel. They stay in this browser only.</p>
+  <label>Repository<input id="repo" placeholder="OMAR6972/lms-guardian" autocomplete="off"></label>
+  <label>GitHub key<input id="token" type="password" autocomplete="off"></label>
+  <label>Data passphrase<input id="pass" type="password" autocomplete="off"></label>
+  <div class="row"><button class="primary" type="submit">Save</button><span class="err" id="serr"></span></div>
+</form>
+
+<div id="app" hidden>
+  <div class="tabs">
+    <button data-tab="new" aria-pressed="true">Since last visit</button>
+    <button data-tab="all" aria-pressed="false">History</button>
+    <button data-tab="due" aria-pressed="false">Deadlines</button>
+    <button data-tab="grades" aria-pressed="false">Grades</button>
+  </div>
+  <div id="filters" class="filters" hidden>
+    <input type="search" id="q" placeholder="Search updates">
+    <select id="fCourse"><option value="">All subjects</option></select>
+    <select id="fCat"><option value="">All kinds</option></select>
+    <select id="fRead"><option value="">Read and unread</option><option value="u">Unread only</option></select>
+    <input type="date" id="fDate" title="On or after this date">
+  </div>
+  <div id="visitRow" class="row" style="margin-bottom:8px" hidden><span class="mute">Summary for visit:</span><select id="visit" style="width:auto;flex:1"></select></div>
+  <div id="list"></div>
+</div>
+<p class="mute" id="msg"></p>
+<script type="module" src="dashboard.js"></script>
+</body>
+</html>

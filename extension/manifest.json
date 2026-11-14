@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "LMS Guardian",
+  "version": "0.1.0",
+  "description": "Personal dashboard for LMS Guardian alerts, plus SIS grade capture from your own logged-in session.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://api.github.com/*", "https://eng.asu.edu.eg/*", "https://lms.eng.asu.edu.eg/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "LMS Guardian", "default_popup": "dashboard.html" },
+  "content_scripts": [
+    { "matches": ["https://lms.eng.asu.edu.eg/*"], "js": ["content-lms.js"], "run_at": "document_idle" },
+    { "matches": ["https://eng.asu.edu.eg/*"], "js": ["content-sis.js"], "run_at": "document_idle" }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["dashboard.html"], "matches": ["https://lms.eng.asu.edu.eg/*"] }
+  ]
+}

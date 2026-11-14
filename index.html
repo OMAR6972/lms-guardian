@@ -39,7 +39,7 @@ input[type=text],input[type=password],input[type=search]{width:100%;padding:10px
 .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px 16px;display:grid;gap:10px;box-shadow:0 1px 3px rgba(20,60,110,.06)}
 .cs .ct{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .cs .code{font-weight:700}
-.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips{display:flex;gap:8px 16px;flex-wrap:wrap}
 .chip{min-height:36px;padding:5px 12px;border-radius:99px;font-size:.9rem;background:var(--panel);}
 .chip[aria-pressed=true]{background:var(--acc);color:var(--acc-fg);border-color:var(--acc);font-weight:700}
 .chip.off{opacity:.5}
@@ -245,6 +245,15 @@ function link(p) {
   return bot && p.invite ? "https://t.me/" + bot + "?start=" + p.invite : "";
 }
 var HOOK = /^https:\/\/(?:(?:canary|ptb)\.)?(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+var CATS = [["materials", "New materials & files"], ["edits", "Edits & removals"], ["assignments", "Assignments & deadlines"],
+  ["quizzes", "Quizzes"], ["posts", "Announcements & posts"]];
+var OWNER_CATS = [["grades", "Moodle grades"], ["sis", "SIS grades"]];
+function watchRow(p, i) {
+  var cats = p.owner ? CATS.concat(OWNER_CATS) : CATS, w = p.watch || {};
+  return '<div><p class="mute">Gets alerts about:</p><div class="chips">' + cats.map(function (c) {
+    return '<label class="sw"><input type="checkbox" data-w="' + i + ":" + c[0] + '"' + (w[c[0]] !== false ? " checked" : "") + "> " + c[1] + "</label>";
+  }).join("") + "</div></div>";
+}
 function renderPeople() {
   var chats = (S.state && S.state.chats) || {};
   $("people").innerHTML = people().map(function (p, i) {
@@ -263,7 +272,7 @@ function renderPeople() {
     var kind = p.owner ? "You (owner)" : isD ? "Discord channel" : "Telegram";
     return '<div class="card"><div class="row between"><input type="text" data-name="' + i + '" value="' + esc(p.name) + '" style="max-width:280px">' +
       '<label class="sw"><input type="checkbox" data-act="' + i + '"' + (p.active !== false ? " checked" : "") + "> Active</label></div>" +
-      '<p class="mute">' + kind + " · follows " + n + " subject" + (n === 1 ? "" : "s") + "</p>" + extra + rm + "</div>";
+      '<p class="mute">' + kind + " · follows " + n + " subject" + (n === 1 ? "" : "s") + "</p>" + watchRow(p, i) + extra + rm + "</div>";
   }).join("");
 }
 
@@ -311,7 +320,13 @@ $("people").oninput = function (e) {
 };
 $("people").onchange = function (e) {
   var t = e.target;
-  if (t.dataset.act !== undefined) { people()[+t.dataset.act].active = t.checked; dirty(); renderAll(); }
+  if (t.dataset.w !== undefined) {
+    var w = t.dataset.w.split(":"), pp = people()[+w[0]];
+    pp.watch = pp.watch || {};
+    if (t.checked) delete pp.watch[w[1]]; else pp.watch[w[1]] = false;
+    dirty();
+  }
+  else if (t.dataset.act !== undefined) { people()[+t.dataset.act].active = t.checked; dirty(); renderAll(); }
   else if (t.dataset.name !== undefined) { renderSubjects(); }
   else if (t.dataset.hook !== undefined) { renderPeople(); }
 };

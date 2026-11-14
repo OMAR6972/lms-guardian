@@ -30,7 +30,7 @@ def parse_modules(contents):
     return out
 
 
-def build(m, cids, old, log=print):
+def build(m, cids, old, log=print, grades=True):
     """Fetch snapshots for `cids`. Returns (snaps, failed). A course with ANY failed component is
     reported as failed and left out, so a flaky API call can never look like 'everything was deleted'."""
     snaps, failed = {}, set()
@@ -97,7 +97,10 @@ def build(m, cids, old, log=print):
         prev = (old.get(str(cid)) or {}).get("disc", {})
         for f in forums.get(cid, []):
             try:
-                data = m.call("mod_forum_get_forum_discussions", forumid=f["id"], perpage=10)
+                try:
+                    data = m.call("mod_forum_get_forum_discussions", forumid=f["id"], perpage=10)
+                except MoodleError:
+                    data = m.call("mod_forum_get_forum_discussions_paginated", forumid=f["id"], perpage=10)
             except MoodleError as e:
                 log(f"forum {f['id']} skipped: {e}")
                 # keep what we knew so a later success doesn't re-announce old posts
@@ -112,6 +115,23 @@ def build(m, cids, old, log=print):
                     "created": d.get("created", 0),
                     "url": f"{m.base}/mod/forum/discuss.php?d={did}",
                 }
+    if grades:
+        for cid in list(snaps):
+            prev_g = (old.get(str(cid)) or {}).get("grades")
+            try:
+                data = m.call("gradereport_user_get_grade_items", courseid=cid, userid=m.userid)
+                items = (data.get("usergrades") or [{}])[0].get("gradeitems", [])
+                snaps[cid]["grades"] = {
+                    str(g["id"]): {
+                        "name": norm_text(g.get("itemname")) or ("Course total" if g.get("itemtype") == "course" else norm_text(g.get("itemtype")) or "Grade"),
+                        "grade": norm_text(g.get("gradeformatted")),
+                        "max": g.get("grademax"),
+                        "url": f"{m.base}/grade/report/user/index.php?id={cid}",
+                    } for g in items if "id" in g}
+            except (MoodleError, KeyError, TypeError, AttributeError) as e:
+                log(f"course {cid}: grades skipped: {type(e).__name__}")
+                if prev_g is not None:
+                    snaps[cid]["grades"] = prev_g  # keep what we knew; never announce on a failed read
     return snaps, failed
 
 

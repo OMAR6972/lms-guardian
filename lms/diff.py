@@ -8,8 +8,12 @@ LABEL = {"resource": "file", "folder": "folder", "url": "link", "page": "page", 
 SKIP_MODULES = ("assign", "quiz")  # covered by the richer assignment/quiz diffs
 
 
-def ev(emoji, kind, title, lines=None, url=""):
-    return {"emoji": emoji, "kind": kind, "title": title, "lines": lines or [], "url": url}
+# Categories a recipient can switch on/off in the panel. "grades" and "sis" only ever go to the owner.
+CATS = ("materials", "edits", "assignments", "quizzes", "posts", "grades", "sis")
+
+
+def ev(emoji, kind, title, lines=None, url="", cat="materials"):
+    return {"emoji": emoji, "kind": kind, "title": title, "lines": lines or [], "url": url, "cat": cat}
 
 
 def date_change(label, old, new):
@@ -61,10 +65,10 @@ def diff_modules(old, new):
             if only_new_files:
                 out.append(ev("➕", f"New file in {kind_name}", n["name"], lines, n["url"]))
             else:
-                out.append(ev("🔄", f"Updated {kind_name}", n["name"], lines, n["url"]))
+                out.append(ev("🔄", f"Updated {kind_name}", n["name"], lines, n["url"], cat="edits"))
     for mid, o in old.items():
         if mid not in new and o["modname"] not in SKIP_MODULES:
-            out.append(ev("🗑", f"Removed {LABEL.get(o['modname'], o['modname'] or 'item')}", o["name"]))
+            out.append(ev("🗑", f"Removed {LABEL.get(o['modname'], o['modname'] or 'item')}", o["name"], cat="edits"))
     return out
 
 
@@ -81,7 +85,7 @@ def diff_assigns(old, new):
                 lines.append("No due date set")
             if n["snip"]:
                 lines.append(n["snip"][:160])
-            out.append(ev("📝", "New assignment", n["name"], lines, n["url"]))
+            out.append(ev("📝", "New assignment", n["name"], lines, n["url"], cat="assignments"))
             continue
         lines = []
         if o["name"] != n["name"]:
@@ -93,10 +97,10 @@ def diff_assigns(old, new):
         if o["desc"] != n["desc"]:
             lines.append("Description/requirements edited" + (f": {n['snip'][:140]}" if n["snip"] else ""))
         if lines:
-            out.append(ev("⏰" if any("Due" in l for l in lines) else "✏️", "Assignment changed", n["name"], lines, n["url"]))
+            out.append(ev("⏰" if any("Due" in l for l in lines) else "✏️", "Assignment changed", n["name"], lines, n["url"], cat="assignments"))
     for aid, o in old.items():
         if aid not in new:
-            out.append(ev("🗑", "Assignment removed", o["name"], [], o.get("url", "")))
+            out.append(ev("🗑", "Assignment removed", o["name"], [], o.get("url", ""), cat="assignments"))
     return out
 
 
@@ -112,7 +116,7 @@ def diff_quizzes(old, new):
                 lines.append(f"Closes: {fmt_ts(n['close'])}")
             if n["limit"]:
                 lines.append(f"Time limit: {n['limit'] // 60} min")
-            out.append(ev("❓", "New quiz", n["name"], lines, n["url"]))
+            out.append(ev("❓", "New quiz", n["name"], lines, n["url"], cat="quizzes"))
             continue
         lines = []
         if o["name"] != n["name"]:
@@ -126,10 +130,10 @@ def diff_quizzes(old, new):
         if o["desc"] != n["desc"]:
             lines.append("Instructions edited" + (f": {n['snip'][:140]}" if n["snip"] else ""))
         if lines:
-            out.append(ev("⏰", "Quiz changed", n["name"], lines, n["url"]))
+            out.append(ev("⏰", "Quiz changed", n["name"], lines, n["url"], cat="quizzes"))
     for qid, o in old.items():
         if qid not in new:
-            out.append(ev("🗑", "Quiz removed", o["name"], [], o.get("url", "")))
+            out.append(ev("🗑", "Quiz removed", o["name"], [], o.get("url", ""), cat="quizzes"))
     return out
 
 
@@ -140,15 +144,59 @@ def diff_disc(old, new):
         if o is None:
             kind = "New announcement" if n["news"] else f"New post in {n['forum']}"
             lines = [n["snip"][:240]] if n["snip"] else []
-            out.append(ev("📢" if n["news"] else "💬", kind, n["subject"], lines, n["url"]))
+            out.append(ev("📢" if n["news"] else "💬", kind, n["subject"], lines, n["url"], cat="posts"))
         elif n["news"] and o["msg"] != n["msg"]:
-            out.append(ev("✏️", "Announcement edited", n["subject"], [n["snip"][:240]] if n["snip"] else [], n["url"]))
+            out.append(ev("✏️", "Announcement edited", n["subject"], [n["snip"][:240]] if n["snip"] else [], n["url"], cat="posts"))
+    return out
+
+
+def _has(g):
+    return bool(g) and g.get("grade", "") not in ("", "-")
+
+
+def _grade_text(g):
+    out = g["grade"]
+    if g.get("max") not in (None, "", 0) and "/" not in out and "%" not in out:
+        out += f" / {g['max']:g}" if isinstance(g["max"], (int, float)) else f" / {g['max']}"
+    return out
+
+
+def diff_grades(old, new):
+    out = []
+    for gid, n in new.items():
+        o = old.get(gid)
+        if _has(n) and not _has(o):
+            out.append(ev("🎯", "New grade", n["name"], [f"Grade: {_grade_text(n)}"], n.get("url", ""), cat="grades"))
+        elif _has(n) and _has(o) and (o["grade"], o.get("max")) != (n["grade"], n.get("max")):
+            out.append(ev("🎯", "Grade changed", n["name"], [f"{_grade_text(o)} → {_grade_text(n)}"], n.get("url", ""), cat="grades"))
+        elif _has(o) and not _has(n):
+            out.append(ev("🎯", "Grade removed", n["name"], [f"Was: {_grade_text(o)}"], n.get("url", ""), cat="grades"))
+    return out
+
+
+def diff_sis(old, new):
+    """Compare two SIS snapshots ({page_key: {"title":..., "rows": {row_key: [cells]}}})."""
+    out = []
+    for key, page in new.items():
+        orows = (old.get(key) or {}).get("rows")
+        if orows is None:
+            continue  # page seen for the first time: baseline silently
+        title = page.get("title") or "SIS"
+        for rk, cells in page.get("rows", {}).items():
+            label = rk.split("|")[-1] or "row"
+            if rk not in orows:
+                out.append(ev("🎓", "New SIS entry", label, [" · ".join(c for c in cells if c)[:300], f"Page: {title}"], page.get("url", ""), cat="sis"))
+            elif orows[rk] != cells:
+                out.append(ev("🎓", "SIS entry changed", label,
+                              ["Before: " + " · ".join(c for c in orows[rk] if c)[:250],
+                               "Now: " + " · ".join(c for c in cells if c)[:250], f"Page: {title}"], page.get("url", ""), cat="sis"))
     return out
 
 
 def diff_course(old, new):
     """Events for everything that changed between two snapshots of one course."""
-    return (diff_assigns(old.get("assigns", {}), new.get("assigns", {}))
+    grades = diff_grades(old["grades"], new["grades"]) if "grades" in old and "grades" in new else []  # else: silent baseline
+    return (grades + diff_assigns(old.get("assigns", {}), new.get("assigns", {}))
             + diff_quizzes(old.get("quizzes", {}), new.get("quizzes", {}))
             + diff_disc(old.get("disc", {}), new.get("disc", {}))
             + diff_modules(old.get("modules", {}), new.get("modules", {})))

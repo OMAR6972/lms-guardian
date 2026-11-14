@@ -62,6 +62,7 @@ class FakeMoodle:
 
     def __init__(self):
         self.token, self.logins, self.valid = None, 0, "tok"
+        self.userid, self.grades, self.fail_grades = 7, None, False
         self.courses = [
             {"id": 1, "fullname": "CSE333s (UG2023) - Data Structures and Algorithms (40954)", "lastaccess": NOW - 86400},
             {"id": 2, "fullname": "CSE334s (UG2023) - Database Systems (40955)", "lastaccess": NOW - 400 * 86400},
@@ -88,6 +89,10 @@ class FakeMoodle:
 
     def call(self, fn, **p):
         cids = [v for k, v in p.items() if k.startswith("courseids[")]
+        if fn == "gradereport_user_get_grade_items":
+            if self.grades is None or self.fail_grades:
+                raise MoodleError("grades: boom")
+            return {"usergrades": [{"gradeitems": self.grades.get(p["courseid"], [])}]}
         if fn == "core_course_get_contents":
             if p["courseid"] in self.fail_contents:
                 raise MoodleError("core_course_get_contents: boom")
@@ -384,3 +389,92 @@ def test_discord_failure_does_not_block_owner_or_crash(tmp_path):
     tg.sent.clear()
     run(tmp_path, m, tg, dc=dc)
     assert tg.sent == []  # owner already notified; no duplicates
+
+
+def put_sis(tmp_path, obj):
+    (tmp_path / "sis.enc").write_text(vault.encrypt(obj, KEY))
+
+
+def test_watch_switches_filter_per_recipient(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)
+    c = cfg(tmp_path)
+    c["people"][0]["watch"] = {"edits": False}
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1],
+                        "watch": {"assignments": False, "materials": False}})
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg, dc=dc)
+    run(tmp_path, m, tg, dc=dc)
+    tg.sent.clear(); dc.sent.clear()
+    m.assigns[1][0]["duedate"] += 3600                       # assignments
+    m.contents[1][0]["modules"][0]["contents"][0]["timemodified"] = 999   # edits (file replaced)
+    run(tmp_path, m, tg, dc=dc)
+    assert "Assignment changed" in tg.texts(OWNER_CHAT) and "replaced" not in tg.texts(OWNER_CHAT)
+    assert "replaced" in dc.texts(HOOK_A) and "Assignment changed" not in dc.texts(HOOK_A)
+    h = state(tmp_path)["history"]
+    assert {x["cat"] for x in h} == {"assignments", "edits"} and all("url" in x for x in h)
+    tg.sent.clear(); dc.sent.clear()
+    run(tmp_path, m, tg, dc=dc)
+    assert tg.sent == [] and dc.sent == []
+
+
+def test_moodle_grades_owner_only_and_silent_baseline(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)                       # grades unavailable at first: nothing recorded
+    c = cfg(tmp_path)
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1]})
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg, dc=dc)
+    m.grades = {1: [{"id": 50, "itemname": "Midterm", "gradeformatted": "18.00", "grademax": 20},
+                    {"id": 51, "itemname": "Quiz 1", "gradeformatted": "-", "grademax": 10}]}
+    tg.sent.clear(); dc.sent.clear()
+    run(tmp_path, m, tg, dc=dc)                       # first successful read = silent baseline
+    assert tg.sent == [] and dc.sent == []
+    m.grades[1][1]["gradeformatted"] = "9.00"
+    m.grades[1][0]["gradeformatted"] = "19.00"
+    run(tmp_path, m, tg, dc=dc)
+    t = tg.texts(OWNER_CHAT)
+    assert "New grade" in t and "Quiz 1" in t and "9.00 / 10" in t
+    assert "Grade changed" in t and "18.00 / 20 → 19.00 / 20" in t
+    assert dc.sent == []                              # grades never go to channels or friends
+    tg.sent.clear()
+    m.fail_grades = True
+    run(tmp_path, m, tg, dc=dc)
+    m.fail_grades = False
+    run(tmp_path, m, tg, dc=dc)
+    assert tg.sent == []                              # a failed read is not a removal or a change
+
+
+def test_sis_intake(tmp_path):
+    m, tg = FakeMoodle(), FakeTelegram()
+    run(tmp_path, m, tg)
+    tg.sent.clear()
+    page = {"title": "Grades", "url": "https://eng.asu.edu.eg/x", "rows": {"t0|CSE333": ["CSE333", "Midterm", ""]}}
+    put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "ok", "pages": {"g": page}})
+    run(tmp_path, m, tg)
+    assert "SIS connected" in tg.texts() and "CSE333" not in tg.texts()
+    tg.sent.clear()
+    run(tmp_path, m, tg)
+    assert tg.sent == []
+    page["rows"]["t0|CSE333"] = ["CSE333", "Midterm", "17"]
+    page["rows"]["t0|CSE334"] = ["CSE334", "Midterm", "15"]
+    put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "ok", "pages": {"g": page}})
+    run(tmp_path, m, tg)
+    t = tg.texts(OWNER_CHAT)
+    assert "<b>SIS grades</b>" in t and "SIS entry changed" in t and "Now: CSE333 · Midterm · 17" in t and "New SIS entry" in t
+    tg.sent.clear()
+    put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "ok", "pages": {"g": {"title": "Grades", "rows": {}}}})
+    run(tmp_path, m, tg)                              # page read empty: ignored
+    put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "ok", "pages": {"g": page}})
+    run(tmp_path, m, tg)
+    assert tg.sent == []
+    put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "logged_out", "pages": {}})
+    run(tmp_path, m, tg); run(tmp_path, m, tg)
+    assert tg.texts().count("not being checked") == 1 and "session ended" in tg.texts()
+    tg.sent.clear()
+    put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "ok", "pages": {"g": page}})
+    run(tmp_path, m, tg)
+    assert "running again" in tg.texts()
+    tg.sent.clear()
+    run(tmp_path, m, tg, now=NOW + 13 * 3600)        # extension silent for 13 h
+    assert "has not reported" in tg.texts()

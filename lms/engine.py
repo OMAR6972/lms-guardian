@@ -14,7 +14,9 @@ from .moodle import LoginError, MoodleError
 from .telegram import TgError
 from .util import NetError, chunk_blocks, esc, fmt_delta, fmt_ts, html_to_md, split_course
 
-HISTORY_MAX = 200
+HISTORY_MAX = 600
+OWNER_ONLY = ("grades", "sis")  # personal: never sent to friends or Discord channels
+SIS_STALE_HOURS = 12
 RECENT_DAYS = 60  # first run only: pre-select subjects opened within this many days
 
 HELP = (
@@ -42,6 +44,7 @@ class Engine:
         self.dc = dc or Discord()
         self.cfg_path = os.path.join(root, "config.enc")
         self.st_path = os.path.join(root, "state.enc")
+        self.sis_path = os.path.join(root, "sis.enc")  # written by the browser extension, only read here
         self.cfg, self._cfg_prev = vault.load(self.cfg_path, key, None)
         self.st, self._st_prev = vault.load(self.st_path, key, {})
         for k, v in (("courses", {}), ("course_info", {}), ("history", []), ("offset", 0),
@@ -73,6 +76,12 @@ class Engine:
     def mine(self, p):
         return {int(c) for c in p.get("courses", [])}
 
+    def wants(self, p, cat):
+        """Does this recipient get this kind of event? Missing switch = on. Grades/SIS: owner only."""
+        if cat in OWNER_ONLY and not p.get("owner"):
+            return False
+        return (p.get("watch") or {}).get(cat, True)
+
     def tracked(self):
         out = set()
         for p in self.active_people():
@@ -96,6 +105,8 @@ class Engine:
 
     # ---------- naming ----------
     def full(self, cid):
+        if cid is None:
+            return "SIS grades"
         info = self.st["course_info"].get(str(cid))
         return f"{info['code']} — {info['name']}" if info else f"course {cid}"
 
@@ -178,12 +189,17 @@ class Engine:
         elif cmd == "/history":
             self.reply(chat, self.text_history(p))
 
+    def my_history(self, p):
+        mine = self.mine(p)
+        return [x for x in self.st["history"]
+                if (x.get("cid") in mine or (x.get("cid") is None and p.get("owner"))) and self.wants(p, x.get("cat", "materials"))]
+
     def text_courses(self, p):
         cids = sorted(self.mine(p), key=lambda c: self.full(c))
         return "<b>Your subjects</b>\n\n" + (self.bullets(cids) if cids else "None selected yet (use the panel).")
 
     def text_status(self, p):
-        h = [x for x in self.st["history"] if x.get("cid") in self.mine(p)]
+        h = self.my_history(p)
         lines = ["<b>Status</b>: running ✅", "",
                  f"Following {len(self.mine(p))} subject{'s' if len(self.mine(p)) != 1 else ''}",
                  f"Last change: {esc(fmt_ts(h[-1]['t']))}" if h else "No changes detected yet"]
@@ -211,7 +227,7 @@ class Engine:
         return "<b>Upcoming</b>\n\n" + "\n\n".join(blocks)
 
     def text_history(self, p):
-        h = [x for x in self.st["history"] if x.get("cid") in self.mine(p)][-10:]
+        h = self.my_history(p)[-10:]
         if not h:
             return "No changes detected yet."
         blocks = [f"<b>{esc(x['text'])}</b>\n   {esc(self.full(x['cid']))}\n   {esc(fmt_ts(x['t']))}" for x in reversed(h)]
@@ -271,6 +287,11 @@ class Engine:
                         "Open the panel to change subjects or add people and Discord channels.")
         if self.logged_in and self.cfg is not None:
             self.crawl()
+        if self.cfg is not None:
+            try:
+                self.process_sis()
+            except vault.VaultError:
+                self.log("sis.enc could not be decrypted; ignoring it")
         self.update_health()
 
     def crawl(self):
@@ -278,7 +299,9 @@ class Engine:
         for key in list(self.st["courses"]):
             if int(key) not in on:
                 del self.st["courses"][key]  # nobody follows it any more; re-adding baselines silently
-        snaps, failed = snapshot.build(self.m, on, self.st["courses"], self.log)
+        owner = self.owner()
+        want_grades = bool(owner) and owner.get("active", True) and self.wants(owner, "grades")
+        snaps, failed = snapshot.build(self.m, on, self.st["courses"], self.log, grades=want_grades)
         self.crawl_failed_all = bool(on) and len(failed) == len(on)
         items = sum(len(s["modules"]) + len(s["assigns"]) + len(s["quizzes"]) for s in snaps.values())
         posts = sum(len(s["disc"]) for s in snaps.values())
@@ -310,22 +333,74 @@ class Engine:
                 self.st["sub"][p["id"]] = sorted(now_mine)
 
     def notify(self, cid, events):
+        """Send each recipient only the kinds of events they switched on. True = safe to remember the change."""
         header = f"<b>{esc(self.full(cid))}</b>"
-        texts = chunk_blocks(header, [render_event(e) for e in events])
-        recipients = [p for p in self.active_people() if cid in self.mine(p)]
-        owner_ids = {p["id"] for p in recipients if p.get("owner")}
-        results = {}
+        if cid is None:
+            recipients = [p for p in self.active_people() if p.get("owner")]
+        else:
+            recipients = [p for p in self.active_people() if cid in self.mine(p)
+                          and cid in {int(c) for c in self.st["sub"].get(p["id"], [])}]
+        owner_ok, any_fail = None, False
         for p in recipients:
-            if self.connected(p) and cid in {int(c) for c in self.st["sub"].get(p["id"], [])}:
-                results[p["id"]] = all([self.deliver(p, t) for t in texts])
-        critical = [results[i] for i in (owner_ids or results) if i in results]
-        ok = all(critical)
+            mine = [e for e in events if self.wants(p, e.get("cat", "materials"))]
+            if not mine or not self.connected(p):
+                continue
+            ok = all([self.deliver(p, t) for t in chunk_blocks(header, [render_event(e) for e in mine])])
+            any_fail = any_fail or not ok
+            if p.get("owner"):
+                owner_ok = ok
+        ok = owner_ok if owner_ok is not None else not any_fail
         if ok:
-            code = self.st["course_info"][str(cid)]["code"]
+            code = "SIS" if cid is None else self.st["course_info"][str(cid)]["code"]
             for e in events:
-                self.st["history"].append({"t": self.now, "cid": cid, "course": code,
-                                           "text": f"{e['kind']}: {e['title']}"})
+                self.st["history"].append({"t": self.now, "cid": cid, "course": code, "cat": e.get("cat", "materials"),
+                                           "text": f"{e['kind']}: {e['title']}", "url": e.get("url", "")})
         return ok
+
+    # ---------- SIS (grades pushed by the browser extension) ----------
+    def process_sis(self):
+        sis, _ = vault.load(self.sis_path, self.key, None)
+        owner = self.owner()
+        if not sis or not owner or not owner.get("active", True) or not self.wants(owner, "sis"):
+            return
+        stale_hours = ((self.cfg.get("settings") or {}).get("sisStaleHours")) or SIS_STALE_HOURS
+        logged_out = sis.get("status") == "logged_out"
+        stale = self.now - int(sis.get("seen", 0)) > stale_hours * 3600
+        if logged_out or stale:
+            if not self.st.get("sis_warned"):
+                why = ("your SIS session ended. Log in to the SIS again and the extension resumes by itself."
+                       if logged_out else
+                       f"the extension has not reported for over {stale_hours} hours (browser closed, or SIS session ended).")
+                if self.say_to(owner["id"], f"⚠️ <b>SIS grades are not being checked</b>\n\n{esc(why[0].upper() + why[1:])}"):
+                    self.st["sis_warned"] = True
+        elif self.st.get("sis_warned"):
+            self.say_to(owner["id"], "✅ <b>SIS grade checks are running again.</b>")
+            self.st["sis_warned"] = False
+        if logged_out:
+            return
+        old = self.st.get("sis")
+        pages = {}
+        for key, page in (sis.get("pages") or {}).items():
+            rows = page.get("rows") or {}
+            if not rows and (old or {}).get(key, {}).get("rows"):
+                continue  # a page that suddenly reads empty is a bad read, not "all grades deleted"
+            pages[key] = {"title": page.get("title", ""), "url": page.get("url", ""), "rows": rows}
+        if not pages:
+            return
+        if old is None:
+            n = sum(len(p["rows"]) for p in pages.values())
+            if self.say_to(owner["id"], f"🎓 <b>SIS connected.</b>\n\nRecorded {n} entries on {len(pages)} page{'s' if len(pages) != 1 else ''} silently. You'll get new and changed grades from now on."):
+                self.st["sis"] = pages
+            return
+        events = diff.diff_sis(old, pages)
+        if events and not self.notify(None, events):
+            return  # retry next run
+        merged = dict(old)
+        for key, page in pages.items():
+            rows = dict((old.get(key) or {}).get("rows", {}))
+            rows.update(page["rows"])  # rows that vanish are kept: a half-loaded page must not erase history
+            merged[key] = {"title": page["title"], "url": page["url"], "rows": rows}
+        self.st["sis"] = merged
 
     def update_health(self):
         bad = (not self.logged_in) or self.crawl_failed_all

@@ -68,7 +68,7 @@ Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGR
    whether `grades skipped` appears. Forum posts have been 0 in every subject; each subject has exactly one
    forum, so either nobody posted or the discussions call fails (a fallback call was added).
 3. **Confirm the switches** suit him in the panel; adjust the category list if he wants finer control.
-4. **Install the extension** (in progress 2026-11-15): panel -> People -> Make extension code -> Save & check now;
+4. **Install the extension** (DONE 2026-11-15: owner installed it, code works, dashboard shows his feed): panel -> People -> Make extension code -> Save & check now;
    `chrome://extensions` -> Developer mode -> Load unpacked -> the `extension` folder (repo ZIP); paste the code.
 5. **SIS**: owner logs in himself (CAPTCHA is never bypassed), opens the grades page, presses
    "Watch this page for grades". Then tune `parseTables` in `extension/lib.js` to the real page.

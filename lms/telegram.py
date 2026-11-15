@@ -69,7 +69,10 @@ class Telegram:
     def answer_cb(self, cb_id, text=""):
         return self._api("answerCallbackQuery", callback_query_id=cb_id, text=text or None)
 
-    def edit_markup(self, message_id, markup):
+    def edit_markup(self, message_id, markup, chat_id=None):
         return self._api(
-            "editMessageReplyMarkup", chat_id=self.chat_id, message_id=message_id, reply_markup=markup
+            "editMessageReplyMarkup", chat_id=chat_id or self.chat_id, message_id=message_id, reply_markup=markup
         )
+
+    def set_commands(self, commands):
+        return self._api("setMyCommands", commands=[{"command": c, "description": d} for c, d in commands])

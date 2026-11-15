@@ -29,13 +29,20 @@ def feed_id(code):
     """File name of a person's extension feed. Derived from their code, so it reveals nothing about them."""
     return hashlib.sha256(("lms-guardian-feed:" + code).encode("utf-8")).hexdigest()[:24]
 
+COMMANDS = [("subjects", "Choose which subjects you follow"), ("courses", "Your subjects"),
+            ("upcoming", "Deadlines coming up"), ("history", "Latest changes"), ("status", "What I'm watching")]
+PICK_NOTE = ("⏳ <b>Changes aren't instant.</b> I apply taps at my next check, about every 2 minutes. "
+             "Tap every subject you want to switch once, then wait: I'll reply <b>once</b> with all your changes.\n"
+             "Tapping the same subject again before I reply still counts as one tap.")
+
 HELP = (
     "<b>LMS Guardian</b>\n\n"
+    "/subjects – choose which subjects you follow\n"
     "/courses – your subjects\n"
     "/upcoming – deadlines and quizzes coming up\n"
     "/history – latest detected changes\n"
     "/status – what the bot is watching\n\n"
-    "Subjects are chosen in the panel."
+    "Replies come at my next check, within about 2 minutes."
 )
 
 
@@ -162,12 +169,103 @@ class Engine:
         except TgError as e:
             self.log(f"getUpdates failed: {e}")
             return
+        picks = {}  # chat -> {"cids": set, "msg": message id, "cbs": [callback ids]}; many taps -> one reply
         for u in updates:
             self.st["offset"] = max(self.st["offset"], u["update_id"] + 1)
             try:
-                self.handle_one(u)
-            except (TgError, KeyError, ValueError) as e:
+                cq = u.get("callback_query")
+                if cq:
+                    self.collect_pick(cq, picks)
+                else:
+                    self.handle_one(u)
+            except (TgError, KeyError, ValueError, TypeError) as e:
                 self.log(f"update {u.get('update_id')} not handled: {type(e).__name__}")
+        for chat, pk in picks.items():
+            try:
+                self.apply_picks(chat, pk)
+            except (TgError, KeyError, ValueError, TypeError) as e:
+                self.log(f"subject picks not applied: {type(e).__name__}")
+        if self.st.get("cmds") != len(COMMANDS):
+            try:
+                self.tg.set_commands(COMMANDS)
+                self.st["cmds"] = len(COMMANDS)
+            except (TgError, AttributeError):
+                pass
+
+    # ---------- choosing subjects from Telegram ----------
+    def short(self, cid):
+        t = self.full(cid)
+        return t if len(t) <= 60 else t[:57] + "…"
+
+    def pickable(self, p):
+        """Owner: every subject Moodle lists. Others: the subjects the owner follows, plus their own."""
+        if p.get("owner"):
+            ids = {int(c) for c in self.st["course_info"]}
+        else:
+            o = self.owner()
+            ids = (self.mine(o) if o else set()) | self.mine(p)
+        return sorted((c for c in ids if str(c) in self.st["course_info"]), key=lambda c: self.full(c))
+
+    def picker_markup(self, p):
+        mine = self.mine(p)
+        return {"inline_keyboard": [[{"text": ("✅ " if c in mine else "⬜ ") + self.short(c), "callback_data": f"t:{c}"}]
+                                    for c in self.pickable(p)]}
+
+    def send_picker(self, p, chat):
+        if not self.pickable(p):
+            return self.reply(chat, "There are no subjects to choose from yet.")
+        text = ("📚 <b>Choose your subjects</b>\n\n✅ = you get alerts for it, ⬜ = you don't. "
+                "Tap a subject to switch it on or off.\n\n" + PICK_NOTE)
+        try:
+            self.tg.send(text, markup=self.picker_markup(p), chat_id=chat)
+        except TgError as e:
+            self.log(f"telegram picker failed: {e}")
+
+    @staticmethod
+    def collect_pick(cq, picks):
+        data = cq.get("data") or ""
+        chat = str(cq["message"]["chat"]["id"])
+        pk = picks.setdefault(chat, {"cids": set(), "msg": None, "cbs": []})
+        pk["cbs"].append(cq["id"])
+        pk["msg"] = cq["message"]["message_id"]
+        if data.startswith("t:") and data[2:].isdigit():
+            pk["cids"].add(int(data[2:]))  # a set: tapping the same subject 5 times is one tap
+
+    def apply_picks(self, chat, pk):
+        p = self.person_for_chat(chat)
+        for cb in pk["cbs"]:
+            try:
+                self.tg.answer_cb(cb, "Saved ✓" if p else "")
+            except TgError:
+                pass  # taps older than a few seconds can't be answered any more; that's fine
+        if not p or self.cfg is None:
+            return
+        allowed = set(self.pickable(p))
+        mine = set(self.mine(p))
+        added = sorted((c for c in pk["cids"] if c in allowed and c not in mine), key=self.full)
+        removed = sorted((c for c in pk["cids"] if c in allowed and c in mine), key=self.full)
+        if not added and not removed:
+            return
+        mine = (mine | set(added)) - set(removed)
+        p["courses"] = sorted(mine)  # saved to config.enc at the end of the run: the panel shows it too
+        self.st["sub"][p["id"]] = sorted(mine)  # this reply already tells them; no extra "Now following" later
+        if pk["msg"]:
+            try:
+                self.tg.edit_markup(pk["msg"], self.picker_markup(p), chat_id=chat)
+            except TgError:
+                pass
+        parts = ["✅ <b>Saved.</b>"]
+        if added:
+            parts.append("<b>Now following:</b>\n" + self.bullets(added))
+        if removed:
+            parts.append("<b>Stopped following:</b>\n" + self.bullets(removed))
+        parts.append(f"You follow {len(mine)} subject{'s' if len(mine) != 1 else ''} now. /subjects to change again.")
+        self.reply(chat, "\n\n".join(parts))
+        owner = self.owner()
+        if owner and owner["id"] != p["id"]:
+            change = ", ".join([f"+{self.st['course_info'][str(c)]['code']}" for c in added] +
+                               [f"−{self.st['course_info'][str(c)]['code']}" for c in removed])
+            self.say_to(owner["id"], f"👤 <b>{esc(p['name'])}</b> changed their subjects in Telegram ({esc(change)}).")
 
     def handle_one(self, u):
         msg = u.get("message")
@@ -184,7 +282,8 @@ class Engine:
                 return self.reply(chat, "That invite link isn't valid any more. Ask for a new one.")
             self.st["chats"][p["id"]] = chat
             n = len(p.get("courses", []))
-            self.reply(chat, f"✅ <b>Connected, {esc(p['name'])}.</b>\nYou follow {n} subject{'s' if n != 1 else ''}. Try /courses.")
+            self.reply(chat, f"✅ <b>Connected, {esc(p['name'])}.</b>\nYou follow {n} subject{'s' if n != 1 else ''}.")
+            self.send_picker(p, chat)
             owner = self.owner()
             if owner and owner["id"] != p["id"]:
                 self.say_to(owner["id"], f"👤 <b>{esc(p['name'])}</b> just connected.")
@@ -196,6 +295,8 @@ class Engine:
             self.reply(chat, HELP)
         elif cmd == "/courses":
             self.reply(chat, self.text_courses(p))
+        elif cmd in ("/subjects", "/choose"):
+            self.send_picker(p, chat)
         elif cmd == "/status":
             self.reply(chat, self.text_status(p))
         elif cmd == "/upcoming":
@@ -210,7 +311,7 @@ class Engine:
 
     def text_courses(self, p):
         cids = sorted(self.mine(p), key=lambda c: self.full(c))
-        return "<b>Your subjects</b>\n\n" + (self.bullets(cids) if cids else "None selected yet (use the panel).")
+        return "<b>Your subjects</b>\n\n" + (self.bullets(cids) if cids else "None yet.") + "\n\nChange them with /subjects."
 
     def text_status(self, p):
         h = self.my_history(p)

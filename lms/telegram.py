@@ -2,7 +2,7 @@
 import json
 import time
 
-from .util import NetError, http_post
+from .util import NetError, http_post, http_post_multipart
 
 
 class TgError(Exception):
@@ -41,6 +41,22 @@ class Telegram:
             "sendMessage", chat_id=chat_id or self.chat_id, text=text, parse_mode="HTML",
             disable_web_page_preview="true", reply_markup=markup,
         )
+
+    def send_document(self, filename, data, caption="", chat_id=None):
+        try:
+            status, text = http_post_multipart(
+                f"https://api.telegram.org/bot{self._token}/sendDocument",
+                {"chat_id": chat_id or self.chat_id, "caption": caption[:1024], "parse_mode": "HTML"},
+                [("document", filename, data)])
+        except NetError as e:
+            raise TgError(str(e))
+        try:
+            d = json.loads(text)
+        except ValueError:
+            raise TgError(f"sendDocument: HTTP {status}")
+        if not d.get("ok"):
+            raise TgError(f"sendDocument: {d.get('description')}")
+        return d["result"]
 
     def get_me(self):
         return self._api("getMe")

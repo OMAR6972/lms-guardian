@@ -41,6 +41,68 @@ def http_post(url, data, retries=2, timeout=40):
     raise NetError(f"network error ({last})")
 
 
+class TooBig(Exception):
+    pass
+
+
+def http_get_bytes(url, max_bytes, timeout=120):
+    """GET a file. Returns (bytes, content_type). Raises TooBig past max_bytes, NetError on failure (no URL in it)."""
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            n = int(r.headers.get("Content-Length") or 0)
+            if n > max_bytes:
+                raise TooBig(n)
+            data = r.read(max_bytes + 1)
+            if len(data) > max_bytes:
+                raise TooBig(len(data))
+            return data, r.headers.get("Content-Type", "")
+    except TooBig:
+        raise
+    except urllib.error.HTTPError as e:
+        raise NetError(f"download failed (HTTP {e.code})")
+    except Exception as e:
+        raise NetError(f"download failed ({type(e).__name__})")
+
+
+def multipart(fields, files):
+    """Encode form fields + files as multipart/form-data. files: [(field, filename, bytes)]."""
+    boundary = "----lmsguardian" + hashlib.sha1(str(time.time()).encode()).hexdigest()[:16]
+    out = []
+    q = lambda v: v.replace("\\", "\\\\").replace('"', '\\"').replace("\r", " ").replace("\n", " ")
+    for k, v in fields.items():
+        out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n'.encode() + str(v).encode() + b"\r\n")
+    for field, name, data in files:
+        out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="{q(name)}"\r\n'
+                   "Content-Type: application/octet-stream\r\n\r\n".encode() + data + b"\r\n")
+    out.append(f"--{boundary}--\r\n".encode())
+    return b"".join(out), f"multipart/form-data; boundary={boundary}"
+
+
+def http_post_multipart(url, fields, files, timeout=180, headers=None):
+    """POST multipart. Returns (status, text). One retry on network errors and 5xx. Never puts the URL in errors."""
+    body, ctype = multipart(fields, files)
+    last = "unknown"
+    for attempt in range(2):
+        req = urllib.request.Request(url, data=body, headers={"User-Agent": UA, "Content-Type": ctype, **(headers or {})})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.status, r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            text = e.read().decode("utf-8", "replace")
+            if e.code >= 500 and attempt == 0:
+                last = f"HTTP {e.code}"
+                time.sleep(3)
+                continue
+            return e.code, text
+        except Exception as e:
+            last = type(e).__name__
+            if attempt == 0:
+                time.sleep(3)
+                continue
+    raise NetError(f"network error ({last})")
+
+
 esc = html.escape
 
 

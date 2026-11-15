@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "7,37 * * * *"   # fallback only; the Cloudflare Worker is the real clock (every 2 minutes)
   workflow_dispatch:
+    inputs:
+      selftest:
+        description: "Also send the newest file in your subjects to you on Telegram (test)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -33,6 +38,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DATA_KEY: ${{ secrets.DATA_KEY }}
+          LMS_SELFTEST: ${{ inputs.selftest && 'files' || '' }}
         run: python -m lms
       - name: Save what the bot remembers
         if: ${{ !cancelled() }}

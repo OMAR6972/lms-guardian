@@ -13,11 +13,13 @@ def parse_modules(contents):
         for mod in sec.get("modules", []):
             if mod.get("uservisible") is False:
                 continue
-            files = {}
+            files, furls = {}, {}
             for c in mod.get("contents") or []:
                 if c.get("type") == "file":
                     key = (c.get("filepath") or "/") + c.get("filename", "")
                     files[key] = [c.get("filesize", 0), c.get("timemodified", 0)]
+                    if c.get("fileurl"):
+                        furls[key] = c["fileurl"]
             out[str(mod["id"])] = {
                 "name": norm_text(mod.get("name")) or norm_text(mod.get("description"))[:60],
                 "modname": mod.get("modname", ""),
@@ -26,6 +28,7 @@ def parse_modules(contents):
                 "desc": digest(mod.get("description")),
                 "snip": norm_text(mod.get("description"))[:200],
                 "files": files,
+                "furls": furls,  # download links (no token inside); not compared, only used to send files
             }
     return out
 

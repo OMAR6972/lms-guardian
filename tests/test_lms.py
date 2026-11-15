@@ -22,13 +22,19 @@ def ts(y, mo, d, h, mi):  # Cairo is UTC+2 in November
 class FakeTelegram:
     def __init__(self):
         self.chat_id = OWNER_CHAT
-        self.sent, self.queue, self.fail_for = [], [], set()
+        self.sent, self.queue, self.fail_for, self.docs = [], [], set(), []
 
     def send(self, text, markup=None, chat_id=None):
         chat = str(chat_id or self.chat_id)
         if chat in self.fail_for:
             raise TgError("boom")
         self.sent.append((chat, text))
+
+    def send_document(self, filename, data, caption="", chat_id=None):
+        chat = str(chat_id or self.chat_id)
+        if chat in self.fail_for:
+            raise TgError("boom")
+        self.docs.append((chat, filename, data, caption))
 
     def get_me(self):
         return {"username": "lms_test_bot"}
@@ -42,7 +48,12 @@ class FakeTelegram:
 
 class FakeDiscord:
     def __init__(self):
-        self.sent, self.fail = [], set()
+        self.sent, self.fail, self.files = [], set(), []
+
+    def send_file(self, url, filename, data, text=""):
+        if url in self.fail:
+            raise DiscordError("HTTP 500")
+        self.files.append((url, filename, data, text))
 
     def send(self, url, markdown):
         if url in self.fail:
@@ -77,6 +88,13 @@ class FakeMoodle:
         self.assigns = {1: [{"id": 5, "cmid": 12, "name": "Assignment 1", "duedate": ts(2026, 11, 20, 23, 59),
                              "allowsubmissionsfromdate": 0, "cutoffdate": 0, "intro": "<p>Do it</p>"}], 2: []}
         self.quizzes, self.discs, self.fail_contents = [], {1: [], 2: []}, set()
+        self.blobs, self.downloads, self.fail_download = {}, [], False
+
+    def download(self, url, max_bytes):
+        self.downloads.append(url)
+        if self.fail_download:
+            raise MoodleError("Moodle refused the file download")
+        return self.blobs.get(url, b"%PDF-1.4 fake " + url.encode())
 
     def login(self):
         self.logins += 1
@@ -524,3 +542,147 @@ def test_extension_feeds_are_per_person_and_private(tmp_path):
     c = cfg(tmp_path); c["people"][1]["active"] = False; set_cfg(tmp_path, c)
     run(tmp_path, m, tg)
     assert len(list((tmp_path / "feeds").glob("*.enc"))) == 1
+
+
+
+def add_file(m, cid, name, size=2048, tm=300, mod=0):
+    url = f"https://lms.test/webservice/pluginfile.php/9/mod_folder/content/0/{name}?forcedownload=1"
+    m.contents[cid][0]["modules"][mod]["contents"].append(
+        {"type": "file", "filename": name, "filepath": "/", "filesize": size, "timemodified": tm, "fileurl": url})
+    return url
+
+
+def test_files_are_sent_as_documents_to_everyone_following(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)
+    c = cfg(tmp_path)
+    c["people"].append(friend([1]))
+    c["people"].append({"id": "f2", "name": "NoFiles", "active": True, "invite": "zz", "courses": [1], "watch": {"materials": False}})
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1]})
+    set_cfg(tmp_path, c)
+    tg.queue = [{"update_id": 1, "message": {"chat": {"id": 777}, "text": "/start abc123"}},
+                {"update_id": 2, "message": {"chat": {"id": 888}, "text": "/start zz"}}]
+    run(tmp_path, m, tg, dc=dc)
+    tg.docs.clear(); dc.files.clear()
+    u = add_file(m, 1, "محاضرة 2.pdf", size=900_000)
+    run(tmp_path, m, tg, dc=dc)
+    assert sorted(d[0] for d in tg.docs) == [OWNER_CHAT, "777"]                 # owner + friend, not the one who switched materials off
+    assert all(d[1] == "محاضرة 2.pdf" and d[2].startswith(b"%PDF") for d in tg.docs)
+    assert "Data Structures and Algorithms" in tg.docs[0][3] and "Lectures" in tg.docs[0][3]
+    assert [f[1] for f in dc.files] == ["محاضرة 2.pdf"]
+    assert m.downloads == [u]                                                  # downloaded once, sent three times
+    # replaced with a new version -> sent again (edits)
+    tg.docs.clear(); dc.files.clear(); m.downloads.clear()
+    m.contents[1][0]["modules"][0]["contents"][-1].update(filesize=950_000, timemodified=400)
+    run(tmp_path, m, tg, dc=dc)
+    assert len(tg.docs) == 2 and len(dc.files) == 1 and "File replaced/updated" in tg.texts(OWNER_CHAT)
+    # quiet run: nothing re-sent
+    tg.docs.clear(); dc.files.clear(); m.downloads.clear()
+    run(tmp_path, m, tg, dc=dc)
+    assert tg.docs == [] and dc.files == [] and m.downloads == []
+
+
+def test_file_limits_failures_and_big_folders(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)
+    c = cfg(tmp_path)
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1]})
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg, dc=dc)
+    tg.sent.clear(); tg.docs.clear(); dc.files.clear(); dc.sent.clear()
+    add_file(m, 1, "video.mp4", size=20 * 1024 * 1024)                       # fine for Telegram, too big for Discord
+    add_file(m, 1, "huge.zip", size=80 * 1024 * 1024)                        # too big for both: never downloaded
+    run(tmp_path, m, tg, dc=dc)
+    assert [d[1] for d in tg.docs] == ["video.mp4"]
+    assert "huge.zip" in tg.texts(OWNER_CHAT) and "too big to send on Telegram" in tg.texts(OWNER_CHAT)
+    assert dc.files == [] and "too big to send on Discord" in dc.texts(HOOK_A) and "video.mp4" in dc.texts(HOOK_A)
+    assert not any("huge.zip" in u for u in m.downloads)
+    # download refused: a short note, the alert itself is not repeated next run
+    tg.sent.clear(); tg.docs.clear()
+    m.fail_download = True
+    add_file(m, 1, "notes.pdf")
+    run(tmp_path, m, tg, dc=dc)
+    assert tg.docs == [] and "couldn't be downloaded" in tg.texts(OWNER_CHAT) and "notes.pdf" in tg.texts(OWNER_CHAT)
+    tg.sent.clear(); m.fail_download = False
+    run(tmp_path, m, tg, dc=dc)
+    assert tg.sent == [] and tg.docs == []
+    # a folder with 12 new files: first 10 + one note
+    tg.sent.clear(); tg.docs.clear()
+    for i in range(12):
+        add_file(m, 1, f"sheet{i:02}.pdf")
+    run(tmp_path, m, tg, dc=dc)
+    assert len(tg.docs) == 10 and "2 more files" in tg.texts(OWNER_CHAT)
+    # Telegram upload failure doesn't block the owner's alert or crash
+    tg.sent.clear(); tg.docs.clear()
+    real = tg.send_document
+    tg.send_document = lambda *a, **k: (_ for _ in ()).throw(TgError("Bad Request: file too large"))
+    add_file(m, 1, "late.pdf")
+    e = run(tmp_path, m, tg, dc=dc)
+    assert "late.pdf" in tg.texts(OWNER_CHAT)
+    tg.send_document = real
+
+
+def test_moodle_download_is_safe():
+    from lms.moodle import Moodle
+    from lms.util import TooBig
+    seen = []
+    mo = Moodle("https://lms.test", "u", "p"); mo.token = "SECRET"
+    def get(url, mx):
+        seen.append(url)
+        return b"%PDF", "application/pdf"
+    assert mo.download("https://lms.test/pluginfile.php/5/mod_resource/content/1/a%20b.pdf?forcedownload=1", 100, get) == b"%PDF"
+    assert seen[-1] == "https://lms.test/webservice/pluginfile.php/5/mod_resource/content/1/a%20b.pdf?forcedownload=1&token=SECRET"
+    mo.download("https://lms.test/webservice/pluginfile.php/5/x.pdf?token=old", 100, get)
+    assert seen[-1].endswith("x.pdf?token=SECRET")
+    for bad in ("https://evil.test/pluginfile.php/5/x.pdf", "https://lms.test/login/index.php", "https://lms.test.evil.com/pluginfile.php/1/x"):
+        with pytest.raises(MoodleError):
+            mo.download(bad, 100, get)
+    with pytest.raises(MoodleError):   # token rejected: Moodle answers with an error page instead of the PDF
+        mo.download("https://lms.test/webservice/pluginfile.php/5/x.pdf", 100, lambda u, mx: (b"<html>login</html>", "text/html"))
+    with pytest.raises(MoodleError):
+        mo.download("https://lms.test/webservice/pluginfile.php/5/x.pdf", 100, lambda u, mx: (b'{"error":"invalidtoken"}', "application/json"))
+
+
+def test_multipart_upload_format_against_a_real_server():
+    """Telegram and Discord both take multipart/form-data; check the bytes a strict parser sees."""
+    import threading
+    from email import message_from_bytes
+    from email.policy import HTTP
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from lms import discord as dmod
+    from lms.util import http_post_multipart, http_get_bytes, TooBig
+    got = {}
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            msg = message_from_bytes(b"Content-Type: " + self.headers["Content-Type"].encode() + b"\r\n\r\n" + body, policy=HTTP)
+            got["parts"] = {p.get_param("name", header="content-disposition"): (p.get_filename(), p.get_payload(decode=True)) for p in msg.iter_parts()}
+            self.send_response(200); self.end_headers(); self.wfile.write(b'{"ok":true,"result":{}}')
+        def do_GET(self):
+            self.send_response(200); self.send_header("Content-Length", "5000"); self.end_headers(); self.wfile.write(b"x" * 5000)
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_port}/"
+    pdf = bytes(range(256)) * 40 + b"\r\n--boundary-like\r\n"
+    status, _ = http_post_multipart(url, {"chat_id": "42", "caption": "📎 محاضرة \"1\"", "parse_mode": "HTML"}, [("document", 'ملف "2".pdf', pdf)])
+    p = got["parts"]
+    assert status == 200 and p["document"][1] == pdf and p["chat_id"][1] == b"42"
+    assert p["caption"][1].decode() == '📎 محاضرة "1"'
+    assert p["document"][0] in ('ملف "2".pdf', 'ملف \\"2\\".pdf')   # quote kept, escaped per RFC 7578
+    # Discord's shape: payload_json + files[0]
+    calls = []
+    dmod.http_post_multipart = lambda u, f, files, headers=None: (calls.append((f, files)) or (200, "{}"))
+    try:
+        dmod.Discord(pause=0).send_file("https://discord.com/api/webhooks/1/abc", "a.pdf", b"PDF", "**hi** @everyone")
+    finally:
+        dmod.http_post_multipart = http_post_multipart
+    f, files = calls[0]
+    pj = json.loads(f["payload_json"])
+    assert pj["allowed_mentions"] == {"parse": []} and pj["attachments"][0]["filename"] == "a.pdf" and files[0][0] == "files[0]"
+    with pytest.raises(TooBig):
+        http_get_bytes(url, 1000)
+    assert http_get_bytes(url, 10000)[0] == b"x" * 5000
+    srv.shutdown()

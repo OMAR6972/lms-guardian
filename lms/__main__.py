@@ -19,7 +19,7 @@ def main():
     m = Moodle(os.environ.get("LMS_BASE", DEFAULT_BASE), os.environ["LMS_USER"], os.environ["LMS_PASS"])
     tg = Telegram(os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"])
     try:
-        eng = Engine(m, tg, key=os.environ["DATA_KEY"], dc=Discord())
+        eng = Engine(m, tg, key=os.environ["DATA_KEY"], dc=Discord(), selftest=os.environ.get("LMS_SELFTEST", ""))
     except VaultError as e:
         print(f"stopping: {e}")
         return 1

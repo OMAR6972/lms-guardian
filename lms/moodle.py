@@ -1,7 +1,9 @@
 """Read-only Moodle web-service client (mobile app service). Only ever calls get_* functions."""
 import json
 
-from .util import http_post
+import urllib.parse
+
+from .util import http_get_bytes, http_post
 
 
 class LoginError(Exception):
@@ -57,3 +59,19 @@ class Moodle:
         if self.userid is None:
             self.userid = self.call("core_webservice_get_site_info")["userid"]
         return self.call("core_enrol_get_users_courses", userid=self.userid)
+
+    def download(self, fileurl, max_bytes, get=None):
+        """Read-only file download with the mobile-app token. Only this site's pluginfile.php URLs are allowed."""
+        get = get or http_get_bytes
+        if not fileurl.startswith(self.base + "/") or "/pluginfile.php/" not in fileurl:
+            raise MoodleError("not a Moodle file link")
+        if "/webservice/pluginfile.php/" not in fileurl:
+            fileurl = fileurl.replace("/pluginfile.php/", "/webservice/pluginfile.php/", 1)
+        parts = urllib.parse.urlsplit(fileurl)
+        query = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query) if k != "token"] + [("token", self.token)]
+        data, ctype = get(urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query))), max_bytes)
+        head = data[:400].lstrip().lower()
+        if ("json" in ctype and head.startswith(b"{") and b"error" in head) or (
+                "text/html" in ctype and not urllib.parse.unquote(parts.path).lower().endswith((".html", ".htm"))):
+            raise MoodleError("Moodle refused the file download")
+        return data

@@ -15,8 +15,17 @@ SKIP_MODULES = ("assign", "quiz")  # covered by the richer assignment/quiz diffs
 CATS = ("materials", "edits", "assignments", "quizzes", "posts", "grades", "sis")
 
 
-def ev(emoji, kind, title, lines=None, url="", cat="materials"):
-    return {"emoji": emoji, "kind": kind, "title": title, "lines": lines or [], "url": url, "cat": cat}
+def ev(emoji, kind, title, lines=None, url="", cat="materials", files=None):
+    e = {"emoji": emoji, "kind": kind, "title": title, "lines": lines or [], "url": url, "cat": cat}
+    if files:
+        e["files"] = files
+    return e
+
+
+def attach(mod, keys):
+    """Files to send as documents: [{name, size, url}] for the given file keys that have a download link."""
+    furls = mod.get("furls") or {}
+    return [{"name": k.rsplit("/", 1)[-1] or k, "size": mod["files"][k][0], "url": furls[k]} for k in keys if furls.get(k)]
 
 
 def date_change(label, old, new):
@@ -45,9 +54,9 @@ def diff_modules(old, new):
             lines += [f"• {name} ({fmt_size(sz)})" for name, (sz, _t) in n["files"].items()]
             if n["modname"] in ("label", "page") and n["snip"]:
                 lines.append(n["snip"][:160])
-            out.append(ev(emoji, f"New {kind_name}", n["name"], lines, n["url"]))
+            out.append(ev(emoji, f"New {kind_name}", n["name"], lines, n["url"], files=attach(n, n["files"])))
             continue
-        lines, only_new_files = [], True
+        lines, only_new_files, changed = [], True, []
         if o["name"] != n["name"]:
             lines.append(f"Renamed: {o['name']} → {n['name']}")
             only_new_files = False
@@ -57,8 +66,10 @@ def diff_modules(old, new):
         for key, (sz, tm) in n["files"].items():
             if key not in o["files"]:
                 lines.append(f"➕ New file: {key.lstrip('/')} ({fmt_size(sz)})")
+                changed.append(key)
             elif o["files"][key] != [sz, tm]:
                 lines.append(f"🔄 File replaced/updated: {key.lstrip('/')} ({fmt_size(sz)})")
+                changed.append(key)
                 only_new_files = False
         for key in o["files"]:
             if key not in n["files"]:
@@ -66,9 +77,9 @@ def diff_modules(old, new):
                 only_new_files = False
         if lines:
             if only_new_files:
-                out.append(ev("➕", f"New file in {kind_name}", n["name"], lines, n["url"]))
+                out.append(ev("➕", f"New file in {kind_name}", n["name"], lines, n["url"], files=attach(n, changed)))
             else:
-                out.append(ev("🔄", f"Updated {kind_name}", n["name"], lines, n["url"], cat="edits"))
+                out.append(ev("🔄", f"Updated {kind_name}", n["name"], lines, n["url"], cat="edits", files=attach(n, changed)))
     for mid, o in old.items():
         if mid not in new and o["modname"] not in SKIP_MODULES:
             out.append(ev("🗑", f"Removed {LABEL.get(o['modname'], o['modname'] or 'item')}", o["name"], cat="edits"))

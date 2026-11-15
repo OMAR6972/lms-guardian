@@ -13,13 +13,16 @@ from . import diff, snapshot, vault
 from .discord import Discord, DiscordError, valid_webhook
 from .moodle import LoginError, MoodleError
 from .telegram import TgError
-from .util import NetError, chunk_blocks, esc, fmt_delta, fmt_ts, html_to_md, split_course
+from .util import NetError, TooBig, chunk_blocks, esc, fmt_delta, fmt_size, fmt_ts, html_to_md, split_course
 
 HISTORY_MAX = 600
 OWNER_ONLY = ("grades", "sis")  # personal: never sent to friends or Discord channels
 SIS_STALE_HOURS = 12
 RECENT_DAYS = 60  # first run only: pre-select subjects opened within this many days
 FEED_HISTORY = 300  # newest events kept in each person's extension feed
+TG_FILE_MAX = 50 * 1024 * 1024       # Telegram bots can upload up to 50 MB
+DC_FILE_MAX = 10 * 1024 * 1024 - 65536  # Discord webhooks without server boosts: 10 MB
+FILES_PER_EVENT = 10                 # a folder with more new files gets the first 10 + a note
 
 
 def feed_id(code):
@@ -46,8 +49,10 @@ def render_event(e):
 
 
 class Engine:
-    def __init__(self, moodle, tg, root=".", key="", now=None, log=print, dc=None):
+    def __init__(self, moodle, tg, root=".", key="", now=None, log=print, dc=None, selftest=""):
         self.m, self.tg, self.log, self.key = moodle, tg, log, key
+        self.selftest = selftest
+        self._dl = {}  # file url -> bytes or the exception, so each file is downloaded once per run
         self.dc = dc or Discord()
         self.root = root
         self.cfg_path = os.path.join(root, "config.enc")
@@ -295,6 +300,8 @@ class Engine:
                         "Open the panel to change subjects or add people and Discord channels.")
         if self.logged_in and self.cfg is not None:
             self.crawl()
+            if self.selftest == "files":
+                self.selftest_files()
         if self.cfg is not None:
             try:
                 self.process_sis()
@@ -356,6 +363,8 @@ class Engine:
                 continue
             ok = all([self.deliver(p, t) for t in chunk_blocks(header, [render_event(e) for e in mine])])
             any_fail = any_fail or not ok
+            if ok:
+                self.send_files(p, cid, mine)
             if p.get("owner"):
                 owner_ok = ok
         ok = owner_ok if owner_ok is not None else not any_fail
@@ -365,6 +374,70 @@ class Engine:
                 self.st["history"].append({"t": self.now, "cid": cid, "course": code, "cat": e.get("cat", "materials"),
                                            "text": f"{e['kind']}: {e['title']}", "url": e.get("url", "")})
         return ok
+
+    # ---------- files as documents ----------
+    def fetch(self, f, limit):
+        if f["url"] not in self._dl:
+            try:
+                self._dl[f["url"]] = self.m.download(f["url"], TG_FILE_MAX)
+            except (TooBig, MoodleError, NetError, LoginError) as e:
+                self._dl[f["url"]] = e
+                self.log(f"file download failed: {type(e).__name__}: {e}"[:200])
+        got = self._dl[f["url"]]
+        if isinstance(got, TooBig) or (isinstance(got, bytes) and len(got) > limit):
+            raise TooBig()
+        if isinstance(got, Exception):
+            raise got
+        return got
+
+    def send_files(self, p, cid, events):
+        """After the text alert: the files themselves. A failure here never blocks or repeats the alert."""
+        if not self.wants(p, "materials"):
+            return  # the files themselves follow the "New materials & files" switch
+        discord = self.is_discord(p)
+        limit = DC_FILE_MAX if discord else TG_FILE_MAX
+        where = "Discord" if discord else "Telegram"
+        for e in events:
+            files = e.get("files") or []
+            for f in files[:FILES_PER_EVENT]:
+                caption = f"📎 {esc(f['name'])}\n{esc(self.full(cid))} · {esc(e['title'])}"
+                try:
+                    if f.get("size", 0) > limit:
+                        raise TooBig()
+                    data = self.fetch(f, limit)
+                    if discord:
+                        self.dc.send_file(p["discord"], f["name"], data, html_to_md(caption))
+                    else:
+                        self.tg.send_document(f["name"], data, caption, chat_id=self.st["chats"][p["id"]])
+                except TooBig:
+                    self.deliver(p, f"📎 <b>{esc(f['name'])}</b> ({esc(fmt_size(f.get('size', 0)))}) is too big to send on {where}. Open it in Moodle from the alert above.")
+                except (MoodleError, NetError, LoginError):
+                    self.deliver(p, f"📎 <b>{esc(f['name'])}</b> couldn't be downloaded from Moodle. Open it from the alert above.")
+                except (TgError, DiscordError) as x:
+                    self.log(f"file send to {where.lower()} failed: {x}"[:200])
+            if len(files) > FILES_PER_EVENT:
+                self.deliver(p, f"📁 {len(files) - FILES_PER_EVENT} more file{'s' if len(files) - FILES_PER_EVENT != 1 else ''} in <b>{esc(e['title'])}</b>. Open it in Moodle from the alert above.")
+
+    def selftest_files(self):
+        """Manual test (Actions -> Run workflow -> self-test): send the newest file in your subjects to you only."""
+        owner = self.owner()
+        best = None
+        for cid in self.mine(owner) if owner else []:
+            for mod in (self.st["courses"].get(str(cid)) or {}).get("modules", {}).values():
+                for key, (size, tm) in mod["files"].items():
+                    if (mod.get("furls") or {}).get(key) and (best is None or tm > best[0]):
+                        best = (tm, cid, mod, key)
+        if not best:
+            return self.log("selftest: no file with a download link found in your subjects")
+        tm, cid, mod, key = best
+        f = {"name": key.rsplit("/", 1)[-1], "size": mod["files"][key][0], "url": mod["furls"][key]}
+        e = {"title": mod["name"], "files": [f]}
+        self.say_to(owner["id"], f"🧪 <b>File test</b>\nSending the newest file in your subjects: {esc(f['name'])} ({esc(fmt_size(f['size']))}).")
+        sent_before = len(self._dl)
+        self.send_files(owner, cid, [e])
+        got = self._dl.get(f["url"])
+        self.log(f"selftest: {f['name']!r} {fmt_size(f['size'])} downloaded={isinstance(got, bytes)}"
+                 + (f" bytes={len(got)}" if isinstance(got, bytes) else f" error={type(got).__name__}") + f" new_downloads={len(self._dl) - sent_before}")
 
     # ---------- SIS (grades pushed by the browser extension) ----------
     def process_sis(self):

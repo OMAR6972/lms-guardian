@@ -9,6 +9,9 @@ HOOK_RE = re.compile(r"^https://(?:(?:canary|ptb)\.)?(?:discord|discordapp)\.com
 UA = "DiscordBot (https://github.com/OMAR6972/lms-guardian, 1.0)"
 
 
+from .util import NetError, http_post_multipart
+
+
 class DiscordError(Exception):
     """Never contains the webhook URL (it is a secret)."""
 
@@ -45,3 +48,26 @@ class Discord:
                 raise DiscordError(f"HTTP {e.code}")
             except Exception as e:
                 raise DiscordError(type(e).__name__)
+
+    def send_file(self, url, filename, data, text=""):
+        if not valid_webhook(url):
+            raise DiscordError("not a Discord webhook link")
+        payload = json.dumps({"content": text[:2000], "allowed_mentions": {"parse": []},
+                              "attachments": [{"id": 0, "filename": filename}]})
+        for attempt in range(2):
+            try:
+                status, body = http_post_multipart(url, {"payload_json": payload}, [("files[0]", filename, data)],
+                                                   headers={"User-Agent": UA})
+            except NetError as e:
+                raise DiscordError(str(e))
+            if status == 429 and attempt == 0:
+                try:
+                    wait = float(json.loads(body).get("retry_after", 2))
+                except (ValueError, TypeError):
+                    wait = 2.0
+                time.sleep(min(wait, 10) + 0.5)
+                continue
+            if status >= 300:
+                raise DiscordError(f"HTTP {status}")
+            time.sleep(self.pause)
+            return

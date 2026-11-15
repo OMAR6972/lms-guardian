@@ -2,9 +2,12 @@
 from .util import fmt_delta, fmt_size, fmt_ts
 
 EMOJI = {"resource": "📄", "folder": "📁", "url": "🔗", "page": "📃", "label": "🏷", "book": "📖",
-         "forum": "💬", "feedback": "📋", "choice": "🗳", "workshop": "🛠", "lti": "🧩", "scorm": "🎓"}
+         "forum": "💬", "feedback": "📋", "choice": "🗳", "workshop": "🛠", "lti": "🧩", "scorm": "🎓", "scheduler": "📆", "survey": "📋"}
 LABEL = {"resource": "file", "folder": "folder", "url": "link", "page": "page", "label": "text block",
-         "book": "book", "forum": "forum", "feedback": "feedback form", "choice": "poll"}
+         "book": "book", "forum": "forum", "feedback": "feedback form", "choice": "poll",
+         "workshop": "peer-review workshop", "lti": "external tool", "scorm": "course package",
+         "scheduler": "booking slots", "wiki": "wiki", "glossary": "glossary", "data": "database",
+         "lesson": "lesson", "chat": "chat", "survey": "survey", "h5pactivity": "interactive activity"}
 SKIP_MODULES = ("assign", "quiz")  # covered by the richer assignment/quiz diffs
 
 

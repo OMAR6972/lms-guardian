@@ -1,87 +1,141 @@
-// Service worker: keeps the unread badge fresh.
-// The SIS part below is dormant while SIS is skipped: no SIS page script is loaded and it needs owner keys.
-import { settings, readFeed, writeEnc, parseTables, looksLoggedOut, pageKey, eventId } from "./lib.js";
+// Service worker: unread badge, and SIS marks checks while Chrome is open.
+// SIS: uses your own signed-in session (you log in yourself; the CAPTCHA is never touched). A light ping every
+// 2 minutes keeps an idle session alive; a full read of your subjects and final grades runs every 10 minutes,
+// and right away when you open any SIS page. Nothing is read from the SIS except marks and grades.
+import { settings, readFeed, readEnc, writeEnc, REPO, eventId, SIS, looksLoggedOut, profileUrl, parseMyCourses, parseMarks, parseFinals,
+  unseenSis, baseline, changes, sisPages } from "./lib.js";
 
-const CHECK_MINUTES = 5;        // how often watched SIS pages are re-read while the browser is open
-const HEARTBEAT_MS = 3 * 3600e3; // re-send unchanged data this often so the bot knows the extension is alive
+const PING_MINUTES = 2;
+const FULL_EVERY_MS = 10 * 60e3;
+const VISIT_FRESH_MS = 2 * 60e3;   // opening a SIS page re-reads if the data is older than this
+const HEARTBEAT_MS = 3 * 3600e3;   // re-send unchanged SIS data to the bot this often
+const LOG_MAX = 150;
 
-chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create("tick", { periodInMinutes: CHECK_MINUTES }); tick(); });
-chrome.runtime.onStartup.addListener(() => chrome.alarms.create("tick", { periodInMinutes: CHECK_MINUTES }));
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === "tick") tick(); });
-
-async function ready() {
-  const cfg = await settings();
-  return cfg.code ? cfg : null;
+function schedule() {
+  chrome.alarms.create("tick", { periodInMinutes: 5 });
+  chrome.alarms.create("sis", { periodInMinutes: PING_MINUTES });
 }
-const sisReady = (cfg) => cfg && cfg.token && cfg.pass && cfg.repo;
+chrome.runtime.onInstalled.addListener(() => { schedule(); tick(); sisTick(true); });
+chrome.runtime.onStartup.addListener(() => { schedule(); tick(); sisTick(true); });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === "tick") tick(); else if (a.name === "sis") sisTick(false); });
 
 async function tick() {
-  const cfg = await ready();
-  if (!cfg) return;
-  await refreshBadge(cfg).catch(() => {});
-  if (sisReady(cfg)) await recheckSis(cfg).catch((e) => console.warn("sis recheck:", e.message));
+  const cfg = await settings();
+  if (cfg.code) await refreshBadge(cfg).catch(() => {});
 }
 
+// ---------- badge: unread updates + SIS marks you haven't looked at ----------
 async function refreshBadge(cfg) {
-  const st = await readFeed(cfg.code);
-  const { read = {} } = await chrome.storage.local.get("read");
-  const n = ((st && st.history) || []).filter((e) => !read[eventId(e)]).length;
-  await chrome.storage.local.set({ unread: n });
+  cfg = cfg || (await settings());
+  let n = 0;
+  if (cfg.code) {
+    try {
+      const st = await readFeed(cfg.code);
+      const { read = {} } = await chrome.storage.local.get("read");
+      n = (st.history || []).filter((e) => !read[eventId(e)]).length;
+      await chrome.storage.local.set({ unread: n });
+    } catch (e) { const v = await chrome.storage.local.get("unread"); n = v.unread || 0; }
+  }
+  const { sis, sisSeen = {} } = await chrome.storage.local.get(["sis", "sisSeen"]);
+  const total = n + unseenSis(sis, sisSeen).length;
   chrome.action.setBadgeBackgroundColor({ color: "#2f80d6" });
-  chrome.action.setBadgeText({ text: n ? String(Math.min(n, 99)) : "" });
+  chrome.action.setBadgeText({ text: total ? String(Math.min(total, 99)) : "" });
 }
 
 // ---------- SIS ----------
-async function recordPage(url, title, html) {
-  const { sis = { status: "ok", pages: {} } } = await chrome.storage.local.get("sis");
-  if (looksLoggedOut(url, html)) { sis.status = "logged_out"; }
-  else {
-    const rows = parseTables(html);
-    sis.status = "ok";
-    sis.seen = Math.floor(Date.now() / 1000);
-    if (Object.keys(rows).length) sis.pages[pageKey(url)] = { title: title || "SIS", url, rows };
+let running = null;
+async function get(path) {
+  const r = await fetch(path.startsWith("http") ? path : SIS + path, { credentials: "include", cache: "no-store", redirect: "follow" });
+  const html = await r.text();
+  if (looksLoggedOut(r.url || path, html)) { const e = new Error("logged out"); e.loggedOut = true; throw e; }
+  if (!r.ok) throw new Error(`SIS answered ${r.status}`);
+  return html;
+}
+
+async function sisTick(force) {
+  const { sis } = await chrome.storage.local.get("sis");
+  if (!force && (!sis || sis.status === "logged_out" || sis.status === "never")) {
+    // Not logged in: don't knock on the door every 2 minutes; the next SIS page you open restarts checks.
+    return;
   }
+  const due = force || !sis.fullAt || Date.now() - sis.fullAt >= FULL_EVERY_MS;
+  return due ? sisFull() : sisPing();
+}
+
+async function sisPing() {
+  try { await get("/dashboard"); await patch({ status: "ok", pingAt: Date.now() }); }
+  catch (e) { await patch({ status: e.loggedOut ? "logged_out" : "error", error: e.loggedOut ? "" : e.message, pingAt: Date.now() }); }
+}
+
+async function patch(fields) {
+  const { sis = { status: "never" } } = await chrome.storage.local.get("sis");
+  Object.assign(sis, fields);
   await chrome.storage.local.set({ sis });
   return sis;
 }
 
-async function pushSis(cfg, sis) {
-  const body = JSON.stringify({ status: sis.status, pages: sis.pages });
-  const { sisPushed = {} } = await chrome.storage.local.get("sisPushed");
-  if (sisPushed.body === body && Date.now() - (sisPushed.at || 0) < HEARTBEAT_MS) return;
-  await writeEnc(cfg, "sis.enc", { v: 1, seen: sis.seen || 0, status: sis.status, pages: sis.pages }, "SIS snapshot");
-  await chrome.storage.local.set({ sisPushed: { body, at: Date.now() } });
+/** Read all current subjects' marks and all final grades. One run at a time. */
+function sisFull() {
+  if (!running) running = sisFullInner().finally(() => { running = null; });
+  return running;
+}
+async function sisFullInner() {
+  const { sis: old = { status: "never" }, sisSeen, sisLog = [] } = await chrome.storage.local.get(["sis", "sisSeen", "sisLog"]);
+  try {
+    const dash = await get("/dashboard");
+    const profile = profileUrl(dash) || old.profile || "";
+    const list = parseMyCourses(await get("/dashboard/my_courses"));
+    const courses = {};
+    for (const c of list) {
+      const marks = parseMarks(await get(c.url));
+      courses[c.code] = { name: c.name, term: c.term, url: c.url, marks };
+    }
+    let finals = old.finals || {};
+    if (profile) {
+      const f = parseFinals(await get(profile));
+      if (Object.keys(f).length || !Object.keys(finals).length) finals = f; // an empty read never wipes known grades
+    }
+    if (!list.length && old.courses && Object.keys(old.courses).length) throw new Error("subject list read empty");
+    const sis = { status: "ok", error: "", fullAt: Date.now(), pingAt: Date.now(), profile, courses, finals };
+    // what changed since the last read (kept for the Grades tab)
+    const log = sisLog.concat(changes(old, sis)).slice(-LOG_MAX);
+    const save = { sis, sisLog: log };
+    if (!sisSeen) save.sisSeen = baseline(sis); // first read ever: nothing counts as new
+    await chrome.storage.local.set(save);
+    const cfg = await settings();
+    if (cfg.token && cfg.pass) await pushSis(cfg, sis).catch((e) => console.warn("sis push:", e.message));
+    await refreshBadge(cfg);
+    return sis;
+  } catch (e) {
+    return patch({ status: e.loggedOut ? "logged_out" : "error", error: e.loggedOut ? "" : e.message });
+  }
 }
 
-async function recheckSis(cfg) {
-  const { sisWatch = [] } = await chrome.storage.local.get("sisWatch");
-  if (!sisWatch.length) return;
-  let sis;
-  for (const url of sisWatch) {
-    // Uses your own signed-in session cookies. If the session ended this lands on the login page.
-    const r = await fetch(url, { credentials: "include", redirect: "follow", cache: "no-store" });
-    sis = await recordPage(r.url || url, "", await r.text());
-    if (sis.status === "logged_out") break;
-  }
-  if (sis) await pushSis(cfg, sis);
+
+async function pushSis(cfg, sis) {
+  const pages = sisPages(sis), body = JSON.stringify(pages);
+  const { sisPushed = {} } = await chrome.storage.local.get("sisPushed");
+  if (sisPushed.body === body && Date.now() - (sisPushed.at || 0) < HEARTBEAT_MS) return;
+  await writeEnc({ ...cfg, repo: cfg.repo || REPO }, "sis.enc", { v: 2, seen: Math.floor(Date.now() / 1000), status: "ok", pages }, "SIS snapshot");
+  await chrome.storage.local.set({ sisPushed: { body, at: Date.now() } });
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
-    const cfg = await ready();
-    if (msg.type === "sisPage") {
-      const { sisWatch = [] } = await chrome.storage.local.get("sisWatch");
-      if (!sisWatch.includes(msg.url)) return reply({ watching: false });
-      const sis = await recordPage(msg.url, msg.title, msg.html);
-      if (sisReady(cfg)) await pushSis(cfg, sis).catch((e) => console.warn(e.message));
-      reply({ watching: true, rows: Object.keys((sis.pages[pageKey(msg.url)] || {}).rows || {}).length });
-    } else if (msg.type === "sisToggle") {
-      let { sisWatch = [] } = await chrome.storage.local.get("sisWatch");
-      sisWatch = sisWatch.includes(msg.url) ? sisWatch.filter((u) => u !== msg.url) : sisWatch.concat(msg.url);
-      await chrome.storage.local.set({ sisWatch });
-      reply({ watching: sisWatch.includes(msg.url) });
+    if (msg.type === "sisVisit") {
+      // You opened a SIS page while logged in: read now if the data is a bit old.
+      const { sis } = await chrome.storage.local.get("sis");
+      if (!sis || sis.status !== "ok" || !sis.fullAt || Date.now() - sis.fullAt > VISIT_FRESH_MS) await sisFull();
+      reply({});
+    } else if (msg.type === "sisCheckNow") {
+      reply(await sisFull());
+    } else if (msg.type === "checkKeys") {
+      try {
+        const st = await readEnc({ repo: REPO, token: msg.token, pass: msg.pass }, "state.enc");
+        reply({ ok: !!st });
+      } catch (e) { reply({ ok: false, error: e.message }); }
     } else if (msg.type === "refresh") {
-      if (cfg) await refreshBadge(cfg).catch(() => {});
+      await refreshBadge().catch(() => {});
       reply({});
     } else reply({});
   })();

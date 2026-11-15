@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "LMS Guardian",
-  "version": "0.2.0",
-  "description": "Your LMS Guardian updates from Moodle: what's new, history, deadlines and marks.",
+  "version": "0.3.0",
+  "description": "Your LMS Guardian updates from Moodle and your SIS marks: what's new, deadlines, marks table.",
   "permissions": [
     "storage",
     "alarms"
   ],
   "host_permissions": [
-    "https://raw.githubusercontent.com/*"
+    "https://raw.githubusercontent.com/*",
+    "https://api.github.com/*",
+    "https://eng.asu.edu.eg/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -32,6 +34,15 @@
         "content-lms.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://eng.asu.edu.eg/*"
+      ],
+      "js": [
+        "content-sis.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -40,7 +51,8 @@
         "dashboard.html"
       ],
       "matches": [
-        "https://lms.eng.asu.edu.eg/*"
+        "https://lms.eng.asu.edu.eg/*",
+        "https://eng.asu.edu.eg/*"
       ]
     }
   ],

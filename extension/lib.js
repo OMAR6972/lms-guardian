@@ -70,33 +70,107 @@ export async function writeEnc(cfg, name, obj, message) {
   throw new Error("Could not save (file kept changing).");
 }
 
-// ---------- SIS page reading ----------
-const clean = (s) => s.replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
+// ---------- SIS page reading (eng.asu.edu.eg; plain server-rendered HTML, read with regexes so it also works in the service worker) ----------
+export const SIS = "https://eng.asu.edu.eg";
+const clean = (s) => String(s).replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
   .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#0?39;/g, "'").replace(/\s+/g, " ").trim();
+const CODE = /^[A-Z]{2,5}[0-9x]{2,4}[a-z]?$/;
+const TERM = /^(Fall|Spring|Summer|Winter) \d{4}$/;
 
 /** True when the HTML/URL is the login page rather than a signed-in page. */
 export function looksLoggedOut(url, html) {
-  if (/\/login(\b|\/|\?|$)/i.test(new URL(url).pathname)) return true;
-  return /type=["']?password/i.test(html) && /captcha/i.test(html);
+  try { if (/^\/(ar\/)?login\b/i.test(new URL(url).pathname)) return true; } catch (e) { /* not a URL */ }
+  return /type=["']?password/i.test(html || "") && /captcha/i.test(html || "");
 }
-/** Every table row on the page as {rowKey: [cells]}. Generic on purpose: tuned once the real pages are seen. */
-export function parseTables(html) {
-  const rows = {}, seen = {};
-  const body = html.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, "");
-  const tables = body.match(/<table[\s\S]*?<\/table>/gi) || [];
-  tables.slice(0, 40).forEach((t, ti) => {
-    (t.match(/<tr[\s\S]*?<\/tr>/gi) || []).slice(0, 400).forEach((tr) => {
-      if (!/<td/i.test(tr)) return; // header rows carry no values
-      const cells = (tr.match(/<t[dh][\s\S]*?<\/t[dh]>/gi) || []).slice(0, 14).map(clean);
-      const named = cells.filter(Boolean);
-      if (named.length < 2) return;
-      let k = `t${ti}|${named[0].slice(0, 80)}`;
-      seen[k] = (seen[k] || 0) + 1;
-      if (seen[k] > 1) k += ` #${seen[k]}`;
-      rows[k] = cells;
-    });
-  });
-  return rows;
+/** Profile link from any signed-in page: /users/<id>/profile */
+export function profileUrl(html) {
+  const m = /href="(?:https:\/\/eng\.asu\.edu\.eg)?(\/users\/\d+\/profile)"/.exec(html || "");
+  return m ? SIS + m[1] : "";
 }
-export const pageKey = (url) => { const u = new URL(url); return (u.pathname + u.search).replace(/[^\w/?=&-]/g, "").slice(0, 120); };
+/** My Courses page -> [{url, code, name, term}] for the current year. */
+export function parseMyCourses(html) {
+  const out = [], seen = new Set();
+  const re = /<a href="((?:https:\/\/eng\.asu\.edu\.eg)?\/dashboard\/courses\/show\/\d+[^"]*)"\s*>([\s\S]*?)<\/a>/g;
+  for (let m; (m = re.exec(html || ""));) {
+    const text = clean(m[2]), t = /^([A-Z]{2,5}[0-9x]{2,4}[a-z]?)\s*:\s*(.+?)\s*\(([^()]+)\)\s*$/.exec(text);
+    const url = (m[1].startsWith("/") ? SIS + m[1] : m[1]).replace(/&amp;/g, "&");
+    if (!t || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ url, code: t[1], name: t[2], term: t[3] });
+  }
+  return out;
+}
+/** A subject page -> [{label, value, max}] from the marks boxes ("Midterm  - / 20"). value is "" when not out yet. */
+export function parseMarks(html) {
+  const out = [];
+  const re = /<ul class="row no-gutters">\s*<li[^>]*>([\s\S]*?)<\/li>\s*<li[^>]*>([\s\S]*?)<\/li>\s*<\/ul>/g;
+  for (let m; (m = re.exec(html || ""));) {
+    const label = clean(m[1]), raw = clean(m[2]), p = /^(.*?)\s*\/\s*([\d.]+)$/.exec(raw);
+    if (!label || !p) continue;
+    const v = p[1].trim();
+    out.push({ label, value: v === "-" ? "" : v, max: p[2] });
+  }
+  return out;
+}
+/** Profile -> final grades {"CODE|Term": {code, name, term, grade, gpa}}, from the per-term tables. Nothing personal is read. */
+export function parseFinals(html) {
+  const out = {};
+  // A cell may not contain another row or table, so a wrapper row can never swallow the first real row.
+  const TD = "<td[^>]*>(?:(?!<\\/?(?:td|tr|table)\\b)[\\s\\S])*?<\\/td>";
+  const re = new RegExp(`<tr\\b[^>]*>\\s*((?:${TD}\\s*){6})<\\/tr>`, "g");
+  for (let m; (m = re.exec(html || ""));) {
+    const cells = (m[1].match(new RegExp(TD, "g")) || []).map(clean);
+    const [code, name, term, grade, gpa] = cells;
+    if (!CODE.test(code) || !TERM.test(term) || !grade) continue;
+    out[`${code}|${term}`] = { code, name, term, grade, gpa };
+  }
+  return out;
+}
+// ---------- SIS bookkeeping (pure; shared by the background, the dashboard and the SIS page script) ----------
+/** Marks/grades that are out but that you haven't looked at yet (seen = what you last saw). */
+export function unseenSis(sis, seen) {
+  const out = [];
+  if (!sis || !sis.courses) return out;
+  for (const [code, c] of Object.entries(sis.courses))
+    for (const mk of c.marks || []) if (mk.value && seen[`${code}|${mk.label}`] !== mk.value) out.push(`${code}|${mk.label}`);
+  for (const [k, f] of Object.entries(sis.finals || {})) if (seen[k] !== f.grade) out.push(k);
+  return out;
+}
+/** First read ever: everything already out counts as seen. */
+export function baseline(sis) {
+  const seen = {};
+  for (const [code, c] of Object.entries(sis.courses || {})) for (const mk of c.marks || []) if (mk.value) seen[`${code}|${mk.label}`] = mk.value;
+  for (const [k, f] of Object.entries(sis.finals || {})) seen[k] = f.grade;
+  return seen;
+}
+/** What changed between two reads, for the Grades tab's "Recent changes". */
+export function changes(old, now) {
+  const out = [], t = Date.now();
+  if (!old || !old.courses) return out;
+  for (const [code, c] of Object.entries(now.courses)) {
+    const prev = ((old.courses[code] || {}).marks || []);
+    for (const mk of c.marks) {
+      const was = (prev.find((p) => p.label === mk.label) || {}).value || "";
+      if (mk.value && mk.value !== was) out.push({ t, code, name: c.name, label: mk.label, was, now: mk.value, max: mk.max });
+    }
+  }
+  for (const [k, f] of Object.entries(now.finals)) {
+    const was = ((old.finals || {})[k] || {}).grade || "";
+    if (f.grade !== was && Object.keys(old.finals || {}).length) out.push({ t, code: f.code, name: f.name, label: `Final grade (${f.term})`, was, now: f.grade });
+  }
+  return out;
+}
+/** Owner only: the shape the bot reads from sis.enc (it sends the Telegram messages). */
+export function sisPages(sis) {
+  const marks = {}, finals = {};
+  for (const [code, c] of Object.entries(sis.courses || {}))
+    for (const mk of c.marks || []) marks[`${code}|${mk.label}`] = [`${code} — ${c.name}`, mk.label, `${mk.value || "-"} / ${mk.max}`, c.url];
+  for (const [k, f] of Object.entries(sis.finals || {}))
+    finals[k] = [`${f.code} — ${f.name}`, "Final grade", `${f.grade}${f.gpa ? " · GPA " + f.gpa : ""} · ${f.term}`, sis.profile || ""];
+  return {
+    marks: { title: "Subject marks", kind: "marks", url: SIS + "/dashboard/my_courses", rows: marks },
+    finals: { title: "Final grades", kind: "finals", url: sis.profile || "", rows: finals },
+  };
+}
+
 export const eventId = (e) => `${e.t}|${e.cid}|${e.text}`;

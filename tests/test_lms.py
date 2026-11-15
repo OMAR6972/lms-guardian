@@ -487,6 +487,9 @@ def test_sis_intake(tmp_path):
     run(tmp_path, m, tg)
     assert tg.sent == []
     put_sis(tmp_path, {"v": 1, "seen": NOW, "status": "logged_out", "pages": {}})
+    run(tmp_path, m, tg); run(tmp_path, m, tg, now=NOW + 13 * 3600)
+    assert tg.sent == []                              # logged out / silent is normal: no warnings by default
+    c = cfg(tmp_path); c["settings"] = {"sisWarnings": True}; set_cfg(tmp_path, c)
     run(tmp_path, m, tg); run(tmp_path, m, tg)
     assert tg.texts().count("not being checked") == 1 and "session ended" in tg.texts()
     tg.sent.clear()
@@ -686,3 +689,38 @@ def test_multipart_upload_format_against_a_real_server():
         http_get_bytes(url, 1000)
     assert http_get_bytes(url, 10000)[0] == b"x" * 5000
     srv.shutdown()
+
+
+
+def test_sis_v2_messages_in_plain_words(tmp_path):
+    m, tg, dc = FakeMoodle(), FakeTelegram(), FakeDiscord()
+    run(tmp_path, m, tg, dc=dc)
+    c = cfg(tmp_path)
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1]})
+    set_cfg(tmp_path, c)
+    u = "https://eng.asu.edu.eg/dashboard/courses/show/10302?committee_id=1"
+    marks = {"title": "Subject marks", "kind": "marks", "url": "https://eng.asu.edu.eg/dashboard/my_courses", "rows": {
+        "CSE336s|Midterm": ["CSE336s — Software Design Patterns", "Midterm", "- / 20", u],
+        "CSE336s|Activities": ["CSE336s — Software Design Patterns", "Activities", "- / 30", u]}}
+    finals = {"title": "Final grades", "kind": "finals", "url": "https://eng.asu.edu.eg/users/1/profile", "rows": {
+        "CSE313s|Spring 2026": ["CSE313s — Computer Architecture", "Final grade", "A · GPA 4 · Spring 2026"]}}
+    sis = lambda: put_sis(tmp_path, {"v": 2, "seen": NOW, "status": "ok", "pages": {"marks": marks, "finals": finals}})
+    sis(); run(tmp_path, m, tg, dc=dc)
+    assert "SIS connected" in tg.texts() and "CSE313s" not in tg.texts()        # silent baseline, old finals not announced
+    tg.sent.clear(); dc.sent.clear()
+    marks["rows"]["CSE336s|Midterm"][2] = "17 / 20"
+    finals["rows"]["CSE472s|Fall 2026"] = ["CSE472s — Digital Image Processing", "Final grade", "A- · GPA 3.7 · Fall 2026"]
+    marks["rows"]["CSE411s|Midterm"] = ["CSE411s — Real-Time Embedded Systems Design", "Midterm", "- / 20", u]  # new subject, nothing out
+    sis(); run(tmp_path, m, tg, dc=dc)
+    t = tg.texts(OWNER_CHAT)
+    assert "Midterm released</b>: CSE336s — Software Design Patterns" in t and "17 / 20" in t
+    assert "Final grade released</b>: CSE472s — Digital Image Processing" in t and "A- · GPA 3.7" in t
+    assert "Open in SIS" in t and "Open in Moodle" not in t and "CSE411s" not in t and "Activities" not in t
+    assert dc.sent == []                                                          # marks never go to channels
+    tg.sent.clear()
+    marks["rows"]["CSE336s|Midterm"][2] = "18 / 20"
+    sis(); run(tmp_path, m, tg, dc=dc)
+    assert "Midterm changed" in tg.texts() and "17 / 20 → 18 / 20" in tg.texts()
+    tg.sent.clear()
+    sis(); run(tmp_path, m, tg, dc=dc)
+    assert tg.sent == []

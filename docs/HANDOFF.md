@@ -122,3 +122,28 @@ assignments and quizzes are on Moodle; only midterm, lab and final are on the SI
   (146,680 bytes) and sent it with no error, to Telegram and (input `channel`) to the "Discord Alerts" channel.
 - `install.html` on the panel's site: English/Arabic install guide for friends. Panel People tab:
   "Send code + guide on WhatsApp" and "Install guide" link next to each code.
+
+## 2026-11-15: SIS marks in the extension
+
+How the real SIS looks (checked live with the owner logged in, read-only):
+- `/dashboard/my_courses`: current-year subjects as links `/dashboard/courses/show/<id>?committee_id=<n>` with text
+  `CODE: Name (Fall 2026)`.
+- Each subject page: marks boxes `<ul class="row no-gutters"><li>Midterm</li><li>- / 20</li></ul>` (Midterm,
+  Activities, Practical; "-" = not out). Server-rendered.
+- Profile (`/users/<id>/profile`, redirects to `/students/<id>`): "Study Grades" card, per-term tables of
+  `<tr ><td>CODE</td><td>Name</td><td>Term</td><td>Grade</td><td>GPA</td><td>Hours</td></tr>`. The page also has
+  personal data (national ID etc.); only these rows are read. 42 grades over 6 terms read correctly.
+- Logout is idle-based (owner). Laravel-style session cookie.
+
+Extension 0.3.0:
+- Background: ping `/dashboard` every 2 min while logged in (keeps the session alive), full read every 10 min and
+  when any SIS page is opened. Logged out = checks pause until a SIS page is opened again. Chrome sends the Lax
+  session cookie on these requests (verified against a real local HTTPS server; Playwright route interception hides
+  it, so don't trust routed tests for cookies).
+- Highlights NEW/CHANGED marks on subject pages and grades on the profile; 🎓 button opens the marks table.
+- Grades tab (for everyone): table of current subjects (Midterm/Activities/Practical/Final), recent changes, past
+  terms, plus Moodle marks for the owner. "Seen" state is per browser.
+- Owner only: GitHub key + data passphrase under ⚙ → writes `sis.enc` v2 (pages "marks"/"finals", rows
+  `[subject, label, value, url]`); the bot sends "Midterm released: CSE… — …" messages. Logged-out/stale warnings
+  are off unless `settings.sisWarnings` is true in config.
+- Tests: `tests/fixtures/sis/` (fake pages, real markup), `test_sis_v2_messages_in_plain_words`.

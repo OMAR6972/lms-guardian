@@ -44,7 +44,8 @@ def render_event(e):
     for l in e["lines"]:
         lines.append("   " + esc(l).replace("\n", "\n   "))
     if e["url"]:
-        lines.append(f'   🔗 <a href="{esc(e["url"], quote=True)}">Open in Moodle</a>')
+        where = "SIS" if e.get("cat") == "sis" else "Moodle"
+        lines.append(f'   🔗 <a href="{esc(e["url"], quote=True)}">Open in {where}</a>')
     return "\n".join(lines)
 
 
@@ -454,10 +455,14 @@ class Engine:
         owner = self.owner()
         if not sis or not owner or not owner.get("active", True) or not self.wants(owner, "sis"):
             return
-        stale_hours = ((self.cfg.get("settings") or {}).get("sisStaleHours")) or SIS_STALE_HOURS
+        settings = self.cfg.get("settings") or {}
+        stale_hours = settings.get("sisStaleHours") or SIS_STALE_HOURS
         logged_out = sis.get("status") == "logged_out"
         stale = self.now - int(sis.get("seen", 0)) > stale_hours * 3600
-        if logged_out or stale:
+        # Logged out / silent is the normal state when Chrome is closed, so these warnings are opt-in.
+        if not settings.get("sisWarnings"):
+            pass
+        elif logged_out or stale:
             if not self.st.get("sis_warned"):
                 why = ("your SIS session ended. Log in to the SIS again and the extension resumes by itself."
                        if logged_out else
@@ -476,11 +481,13 @@ class Engine:
             if not rows and (old or {}).get(key, {}).get("rows"):
                 continue  # a page that suddenly reads empty is a bad read, not "all grades deleted"
             pages[key] = {"title": page.get("title", ""), "url": page.get("url", ""), "rows": rows}
+            if page.get("kind"):
+                pages[key]["kind"] = page["kind"]
         if not pages:
             return
         if old is None:
             n = sum(len(p["rows"]) for p in pages.values())
-            if self.say_to(owner["id"], f"🎓 <b>SIS connected.</b>\n\nRecorded {n} entries on {len(pages)} page{'s' if len(pages) != 1 else ''} silently. You'll get new and changed grades from now on."):
+            if self.say_to(owner["id"], f"🎓 <b>SIS connected.</b>\n\nRecorded your current marks ({n} entries) silently. You'll get a message when a mark is released or changes, while Chrome is open."):
                 self.st["sis"] = pages
             return
         events = diff.diff_sis(old, pages)
@@ -491,6 +498,8 @@ class Engine:
             rows = dict((old.get(key) or {}).get("rows", {}))
             rows.update(page["rows"])  # rows that vanish are kept: a half-loaded page must not erase history
             merged[key] = {"title": page["title"], "url": page["url"], "rows": rows}
+            if page.get("kind"):
+                merged[key]["kind"] = page["kind"]
         self.st["sis"] = merged
 
     # ---------- browser extension feeds ----------

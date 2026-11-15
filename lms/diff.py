@@ -190,12 +190,25 @@ def diff_grades(old, new):
 
 
 def diff_sis(old, new):
-    """Compare two SIS snapshots ({page_key: {"title":..., "rows": {row_key: [cells]}}})."""
+    """Compare two SIS snapshots ({page_key: {"title", "url", "kind"?, "rows": {row_key: [cells]}}}).
+    Pages from extension v2 have kind "marks"/"finals" and rows [subject, label, value, url?]."""
     out = []
     for key, page in new.items():
         orows = (old.get(key) or {}).get("rows")
         if orows is None:
             continue  # page seen for the first time: baseline silently
+        if page.get("kind") in ("marks", "finals"):
+            for rk, cells in page.get("rows", {}).items():
+                subject, label, value = (list(cells) + ["", "", ""])[:3]
+                url = cells[3] if len(cells) > 3 else page.get("url", "")
+                was = (orows.get(rk) or [None, None, None])[2]
+                if value == was or not value or value.startswith("-"):
+                    continue  # unchanged, or still not out (a mark that disappears is not announced)
+                if was is None or was.startswith("-"):
+                    out.append(ev("🎓", f"{label} released", subject, [value], url, cat="sis"))
+                else:
+                    out.append(ev("🎓", f"{label} changed", subject, [f"{was} → {value}"], url, cat="sis"))
+            continue
         title = page.get("title") or "SIS"
         for rk, cells in page.get("rows", {}).items():
             label = rk.split("|")[-1] or "row"

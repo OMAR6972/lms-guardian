@@ -32,6 +32,13 @@ input,select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var
 .filters input[type=search]{grid-column:1/-1}
 form{display:grid;gap:8px}
 .err{color:var(--bad)}
+table.marks{width:100%;border-collapse:collapse;font-size:.88rem}
+table.marks th,table.marks td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:center;vertical-align:top}
+table.marks th:first-child,table.marks td:first-child{text-align:start}
+table.marks td.new{background:#fff1bf;color:#10243a;font-weight:700;border-radius:6px}
+.newtag{display:inline-block;font-size:.7rem;background:#f2b705;color:#10243a;border-radius:99px;padding:0 6px;margin-inline-start:4px}
+details summary{cursor:pointer;font-weight:600}
+h3{font-size:.95rem;margin:4px 0 6px}
 body.tab{width:auto;max-width:780px;margin:0 auto;padding:20px 16px}
 body.tab .filters{grid-template-columns:repeat(4,1fr)}
 </style>
@@ -45,6 +52,12 @@ body.tab .filters{grid-template-columns:repeat(4,1fr)}
 <form id="setup" class="card" hidden>
   <p class="mute">Paste your extension code. You get it from the LMS Guardian panel (People tab), or from the person who added you to the bot. It stays in this browser only.</p>
   <label>Extension code<input id="code" type="password" autocomplete="off" spellcheck="false"></label>
+  <details id="ownerBox"><summary>Telegram alerts for SIS marks (owner only)</summary>
+    <p class="mute">Only the bot's owner fills this in: the same GitHub key and data passphrase as the panel. Then new SIS marks are also sent to your Telegram. Leave empty otherwise.</p>
+    <label>GitHub key<input id="token" type="password" autocomplete="off"></label>
+    <label>Data passphrase<input id="pass" type="password" autocomplete="off"></label>
+    <p class="mute" id="keysState"></p>
+  </details>
   <div class="row"><button class="primary" type="submit">Save</button><span class="err" id="serr"></span></div>
 </form>
 

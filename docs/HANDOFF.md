@@ -119,6 +119,6 @@ assignments and quizzes are on Moodle; only midterm, lab and final are on the SI
   failed downloads get a short note. Folders: first 10 files + note. A file failure never repeats the alert.
 - Live proof: Actions "Run workflow" with **selftest** ticked sends the newest file in the owner's subjects to the
   owner. Run on 2026-11-15 downloaded the Software Design Patterns (CSE336s) Course Project Specification PDF
-  (146,680 bytes) and sent it with no error. Discord upload is tested locally only (shape + strict parser).
+  (146,680 bytes) and sent it with no error, to Telegram and (input `channel`) to the "Discord Alerts" channel.
 - `install.html` on the panel's site: English/Arabic install guide for friends. Panel People tab:
   "Send code + guide on WhatsApp" and "Install guide" link next to each code.

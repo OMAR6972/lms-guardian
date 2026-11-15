@@ -34,7 +34,7 @@ Panel (index.html) and extension both decrypt in the browser with the DATA_KEY p
 | `scheduler/` | Cloudflare Worker that dispatches the workflow |
 | `extension/` | Chrome extension (MV3): dashboard (popup or full tab), floating Moodle bell. Opens with a per-person extension code |
 | `feeds/` | One encrypted file per person with an extension code: only their subjects and switches (marks for the owner only) |
-| `tests/test_lms.py` | 21 tests with fake Moodle/Telegram/Discord |
+| `tests/test_lms.py` | 26 tests with fake Moodle/Telegram/Discord |
 
 Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `DATA_KEY`.
 
@@ -83,7 +83,7 @@ Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGR
   One page per term or per subject? Does the URL change per term?
 - **SIS on a phone:** the extension is desktop Chrome only. Is that acceptable?
 - **Extension dashboard:** popup size fine, or does he want a full tab? Should read/unread sync between devices?
-- **Files:** still want new files sent as Telegram documents (the spec's "cached copy")? Not built.
+- **Files:** DONE 2026-11-15, see below.
 - **Friends:** should friends ever get grade alerts for their own accounts? (Would need their own login; not planned.)
 
 ## Known limits
@@ -110,3 +110,15 @@ Live check 2026-11-15 after this change: run succeeded, `forums found: 5 in 5 su
 `checked 5/5 subjects: 106 items, 0 forum posts, 0 failed`, no `grades skipped` (Moodle grades read works live).
 Owner's current subjects use only files, folders, assignment slots and an empty forum; marks for projects,
 assignments and quizzes are on Moodle; only midterm, lab and final are on the SIS.
+
+## 2026-11-15: files as documents, friends' install guide
+
+- New and updated files are sent as the actual file to everyone following the subject (Telegram people and
+  Discord channels) who has "New materials & files" on. Downloaded once per run via the mobile token
+  (`Moodle.download`, pluginfile.php on this site only). Limits: Telegram 50 MB, Discord 10 MB; bigger files or
+  failed downloads get a short note. Folders: first 10 files + note. A file failure never repeats the alert.
+- Live proof: Actions "Run workflow" with **selftest** ticked sends the newest file in the owner's subjects to the
+  owner. Run on 2026-11-15 downloaded the Software Design Patterns (CSE336s) Course Project Specification PDF
+  (146,680 bytes) and sent it with no error. Discord upload is tested locally only (shape + strict parser).
+- `install.html` on the panel's site: English/Arabic install guide for friends. Panel People tab:
+  "Send code + guide on WhatsApp" and "Install guide" link next to each code.

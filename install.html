@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Install LMS Guardian · تثبيت LMS Guardian</title>
+<style>
+:root{--bg:#eef5fc;--panel:#fff;--panel2:#e6f0fb;--fg:#10243a;--mute:#5a7088;--line:#d5e3f3;--acc:#2f80d6;--acc-fg:#fff;--warn:#a86a00;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",Tahoma,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--warn:#f0b455}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 var(--font);padding:20px 16px 60px}
+main{max-width:760px;margin:0 auto;display:grid;gap:14px}
+[hidden]{display:none!important}
+h1{font-size:1.7rem;margin:0;letter-spacing:-.02em}h2{font-size:1.1rem;margin:0}
+p,ol,ul{margin:0}ol,ul{padding-inline-start:1.3em;display:grid;gap:6px}
+.mute{color:var(--mute);font-size:.94rem}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.lang{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px}
+.lang button{font:inherit;color:inherit;border:0;background:none;border-radius:9px;padding:6px 14px;cursor:pointer}
+.lang button[aria-pressed=true]{background:var(--acc);color:var(--acc-fg);font-weight:700}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px 18px;display:grid;gap:10px}
+.step{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:start}
+.num{width:34px;height:34px;border-radius:50%;background:var(--acc);color:var(--acc-fg);display:grid;place-items:center;font-weight:700;grid-row:span 2}
+code,kbd{font-family:ui-monospace,Consolas,monospace;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:1px 6px;font-size:.92em;direction:ltr;unicode-bidi:isolate}
+b{font-weight:700}
+.btn{display:inline-block;background:var(--acc);color:var(--acc-fg);text-decoration:none;font-weight:700;border-radius:12px;padding:10px 18px}
+.note{border-inline-start:4px solid var(--warn);padding-inline-start:12px}
+.copy{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--panel2);color:inherit;border-radius:8px;padding:2px 8px;cursor:pointer;margin-inline-start:6px}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>🔔 LMS Guardian</h1>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-l="en" aria-pressed="true">English</button>
+      <button data-l="ar" aria-pressed="false">العربية</button>
+    </div>
+  </div>
+
+  <!-- ============ ENGLISH ============ -->
+  <section id="en" lang="en" dir="ltr" class="card" style="background:none;border:0;padding:0">
+    <div class="card">
+      <h2>Install the browser extension</h2>
+      <p>It shows your Moodle updates (new files, deadlines, changes) for the subjects you follow, plus a 🔔 on Moodle pages. About 5 minutes.</p>
+      <p class="mute"><b>You need:</b> Google Chrome on a computer (not a phone), and your <b>extension code</b>: a long code of letters and numbers that whoever added you to the bot sends you. Keep it to yourself; it opens your updates.</p>
+    </div>
+
+    <div class="card step"><span class="num">1</span><h2>Download</h2>
+      <div><a class="btn" href="https://github.com/OMAR6972/lms-guardian/archive/refs/heads/main.zip">⬇ Download the extension (ZIP)</a>
+      <p class="mute" style="margin-top:6px">You get a file called <code>lms-guardian-main.zip</code>.</p></div></div>
+
+    <div class="card step"><span class="num">2</span><h2>Unzip it somewhere permanent</h2>
+      <div><p>Open your <b>Downloads</b> folder, right-click the ZIP, choose <b>Extract All…</b>, change the place to your <b>Documents</b> folder and press <b>Extract</b>. On a Mac, double-click the ZIP and drag the new folder into Documents.</p>
+      <p class="mute">Chrome runs the extension from this folder, so don't delete or move it later.</p></div></div>
+
+    <div class="card step"><span class="num">3</span><h2>Turn on Developer mode</h2>
+      <div><p>In Chrome, type <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">copy</button> in the address bar and press Enter. Turn on <b>Developer mode</b> (top right).</p></div></div>
+
+    <div class="card step"><span class="num">4</span><h2>Load the extension</h2>
+      <div><p>Press <b>Load unpacked</b> (top left). Go to <b>Documents → lms-guardian-main</b>, click the folder named <b><code>extension</code></b> once, and press <b>Select Folder</b>.</p>
+      <p class="mute">A card called <b>LMS Guardian</b> with a blue bell appears.</p></div></div>
+
+    <div class="card step"><span class="num">5</span><h2>Pin it</h2>
+      <div><p>Press the puzzle-piece icon 🧩 next to the address bar, then the pin 📌 next to <b>LMS Guardian</b>.</p></div></div>
+
+    <div class="card step"><span class="num">6</span><h2>Enter your code</h2>
+      <div><p>Click the blue bell on the toolbar, paste your extension code, and press <b>Save</b>.</p>
+      <p class="mute">You'll see your name at the top and your updates. On any Moodle page there's now a 🔔 in the bottom-right corner with your unread count. "Open in tab" shows it full-size.</p></div></div>
+
+    <div class="card">
+      <h2>If something goes wrong</h2>
+      <ul>
+        <li><b>"Manifest file is missing"</b>: you picked the outer folder. Pick the <code>extension</code> folder inside it.</li>
+        <li><b>"No updates for this code yet"</b>: your code was just made. Wait 2 minutes and press Save again.</li>
+        <li><b>"This code doesn't open the feed"</b>: the code was copied wrong, or a new one was made. Ask for it again.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Updating later</h2>
+      <p>When you're told there's a new version: download the ZIP again, replace the old <code>lms-guardian-main</code> folder in Documents, then press the round ↻ arrow on the LMS Guardian card in <code>chrome://extensions</code>. You don't need to enter your code again.</p>
+    </div>
+    <p class="mute note">Privacy: the extension never asks for your Moodle password. It only reads a locked file that your own code opens, which holds the updates for your subjects and nothing else.</p>
+  </section>
+
+  <!-- ============ ARABIC ============ -->
+  <section id="ar" lang="ar" dir="rtl" class="card" style="background:none;border:0;padding:0" hidden>
+    <div class="card">
+      <h2>تثبيت إضافة المتصفح</h2>
+      <p>الإضافة بتعرض لك تحديثات Moodle (ملفات جديدة، مواعيد تسليم، تعديلات) للمواد اللي بتتابعها، وبتحط 🔔 على صفحات Moodle. الموضوع بياخد حوالي 5 دقايق.</p>
+      <p class="mute"><b>محتاج:</b> متصفح Google Chrome على كمبيوتر (مش موبايل)، و<b>كود الإضافة</b> بتاعك: كود طويل من حروف وأرقام بيبعتهولك اللي ضافك للبوت. خليه معاك بس، لأنه بيفتح تحديثاتك.</p>
+    </div>
+
+    <div class="card step"><span class="num">1</span><h2>التحميل</h2>
+      <div><a class="btn" href="https://github.com/OMAR6972/lms-guardian/archive/refs/heads/main.zip">⬇ تحميل الإضافة (ZIP)</a>
+      <p class="mute" style="margin-top:6px">هينزل ملف اسمه <code>lms-guardian-main.zip</code>.</p></div></div>
+
+    <div class="card step"><span class="num">2</span><h2>فك الضغط في مكان ثابت</h2>
+      <div><p>افتح فولدر <b>Downloads</b>، اضغط كليك يمين على ملف الـ ZIP واختار <b>Extract All…</b> (استخراج الكل)، غيّر المكان لفولدر <b>Documents</b> (المستندات) واضغط <b>Extract</b>. على الماك: دبل كليك على الملف واسحب الفولدر الجديد لـ Documents.</p>
+      <p class="mute">Chrome بيشغّل الإضافة من الفولدر ده، فما تمسحوش وما تنقلوش بعد كده.</p></div></div>
+
+    <div class="card step"><span class="num">3</span><h2>شغّل وضع المطوّر</h2>
+      <div><p>في Chrome اكتب <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">نسخ</button> في شريط العنوان واضغط Enter. شغّل زرار <b>Developer mode</b> (وضع مطوّر البرامج) فوق على الجنب.</p></div></div>
+
+    <div class="card step"><span class="num">4</span><h2>حمّل الإضافة</h2>
+      <div><p>اضغط <b>Load unpacked</b> (تحميل الإضافة غير المضغوطة). روح لـ <b>Documents ← lms-guardian-main</b>، واضغط مرة واحدة على الفولدر اللي اسمه <b><code>extension</code></b>، وبعدين <b>Select Folder</b> (اختيار مجلد).</p>
+      <p class="mute">هيظهر كارت اسمه <b>LMS Guardian</b> عليه جرس أزرق.</p></div></div>
+
+    <div class="card step"><span class="num">5</span><h2>ثبّتها في الشريط</h2>
+      <div><p>اضغط على أيقونة قطعة البازل 🧩 جنب شريط العنوان، وبعدين الدبوس 📌 جنب <b>LMS Guardian</b>.</p></div></div>
+
+    <div class="card step"><span class="num">6</span><h2>اكتب الكود بتاعك</h2>
+      <div><p>اضغط على الجرس الأزرق في الشريط، والصق كود الإضافة، واضغط <b>Save</b>.</p>
+      <p class="mute">هتلاقي اسمك فوق وتحديثاتك تحته. وعلى أي صفحة في Moodle هيظهر 🔔 في الركن تحت فيه عدد التحديثات اللي ما اتقرتش. زرار "Open in tab" بيفتحها في صفحة كاملة.</p></div></div>
+
+    <div class="card">
+      <h2>لو حصلت مشكلة</h2>
+      <ul>
+        <li><b>"Manifest file is missing"</b>: اخترت الفولدر الخارجي. اختار فولدر <code>extension</code> اللي جواه.</li>
+        <li><b>"No updates for this code yet"</b>: الكود لسه معمول. استنى دقيقتين واضغط Save تاني.</li>
+        <li><b>"This code doesn't open the feed"</b>: الكود اتنسخ غلط أو اتعمل كود جديد. اطلبه تاني.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>التحديث بعد كده</h2>
+      <p>لما يتقالك إن فيه نسخة جديدة: نزّل الـ ZIP تاني، وبدّل فولدر <code>lms-guardian-main</code> القديم في Documents، وبعدين اضغط السهم الدائري ↻ على كارت LMS Guardian في <code>chrome://extensions</code>. مش محتاج تكتب الكود تاني.</p>
+    </div>
+    <p class="mute note">الخصوصية: الإضافة عمرها ما بتطلب باسورد Moodle بتاعك. هي بتقرا بس ملف مقفول ما بيفتحوش غير الكود بتاعك، وفيه تحديثات موادك وبس.</p>
+  </section>
+</main>
+<script>
+(function () {
+  function pick(l) {
+    document.getElementById("en").hidden = l !== "en";
+    document.getElementById("ar").hidden = l !== "ar";
+    document.documentElement.lang = l; document.documentElement.dir = l === "ar" ? "rtl" : "ltr";
+    document.querySelectorAll(".lang button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.l === l); });
+    try { localStorage.setItem("lmsGuideLang", l); } catch (e) {}
+  }
+  var saved = ""; try { saved = localStorage.getItem("lmsGuideLang") || ""; } catch (e) {}
+  var q = new URLSearchParams(location.search).get("lang");
+  pick(q === "ar" || q === "en" ? q : saved || ((navigator.language || "").slice(0, 2) === "ar" ? "ar" : "en"));
+  document.querySelectorAll(".lang button").forEach(function (b) { b.onclick = function () { pick(b.dataset.l); }; });
+  document.querySelectorAll("[data-copy]").forEach(function (b) {
+    b.onclick = function () {
+      var t = b.textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(b.dataset.copy) : Promise.reject()).then(function () { b.textContent = "✓"; setTimeout(function () { b.textContent = t; }, 1500); });
+    };
+  });
+})();
+</script>
+</body>
+</html>

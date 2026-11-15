@@ -240,6 +240,7 @@ function renderSubjects() {
   }).join("") || '<div class="card mute">Nothing matches.</div>';
 }
 
+function guideUrl() { return location.origin + location.pathname.replace(/[^/]*$/, "") + "install.html"; }
 function link(p) {
   var bot = S.state && S.state.bot;
   return bot && p.invite ? "https://t.me/" + bot + "?start=" + p.invite : "";
@@ -270,7 +271,9 @@ function renderPeople() {
     }
     if (!isD) {
       extra += '<div class="row"><span class="mute">Browser extension:</span>' + (p.ext
-        ? '<button data-ext="' + i + '">Copy extension code</button><button class="link" data-newext="' + i + '">' + (S.armedExt === i ? "Tap again: old code stops working" : "Make a new code") + "</button>"
+        ? '<button data-ext="' + i + '">Copy extension code</button>' +
+          (p.owner ? "" : '<a href="https://wa.me/?text=' + encodeURIComponent("Your LMS Guardian extension code (keep it private):\n" + p.ext + "\n\nHow to install / طريقة التثبيت:\n" + guideUrl()) + '" target="_blank" rel="noopener"><button>Send code + guide on WhatsApp</button></a>') +
+          '<a class="mute" href="install.html" target="_blank" rel="noopener">Install guide</a><button class="link" data-newext="' + i + '">' + (S.armedExt === i ? "Tap again: old code stops working" : "Make a new code") + "</button>"
         : '<button data-newext="' + i + '">Make extension code</button>') + "</div>";
     }
     var rm = p.owner ? "" : '<button class="link danger" data-rm="' + i + '">' + (S.armed === i ? "Tap again to remove" : "Remove") + "</button>";

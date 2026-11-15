@@ -9,6 +9,10 @@ on:
         description: "Also send the newest file in your subjects to you on Telegram (test)"
         type: boolean
         default: false
+      channel:
+        description: "Optional: send the test file to this Discord channel (its name in the panel) instead of you"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -39,6 +43,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DATA_KEY: ${{ secrets.DATA_KEY }}
           LMS_SELFTEST: ${{ inputs.selftest && 'files' || '' }}
+          LMS_SELFTEST_CHANNEL: ${{ inputs.channel }}
         run: python -m lms
       - name: Save what the bot remembers
         if: ${{ !cancelled() }}

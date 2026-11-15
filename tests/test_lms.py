@@ -568,7 +568,7 @@ def test_files_are_sent_as_documents_to_everyone_following(tmp_path):
     run(tmp_path, m, tg, dc=dc)
     assert sorted(d[0] for d in tg.docs) == [OWNER_CHAT, "777"]                 # owner + friend, not the one who switched materials off
     assert all(d[1] == "محاضرة 2.pdf" and d[2].startswith(b"%PDF") for d in tg.docs)
-    assert "Data Structures and Algorithms" in tg.docs[0][3] and "Lectures" in tg.docs[0][3]
+    assert "Data Structures and Algorithms" in tg.docs[0][3] and "📁 Lectures" in tg.docs[0][3] and "محاضرة" not in tg.docs[0][3]
     assert [f[1] for f in dc.files] == ["محاضرة 2.pdf"]
     assert m.downloads == [u]                                                  # downloaded once, sent three times
     # replaced with a new version -> sent again (edits)

@@ -77,7 +77,8 @@ def diff_modules(old, new):
                 only_new_files = False
         if lines:
             if only_new_files:
-                out.append(ev("➕", f"New file in {kind_name}", n["name"], lines, n["url"], files=attach(n, changed)))
+                kind = "New file" if kind_name == "file" else f"New file in {kind_name}"
+                out.append(ev("➕", kind, n["name"], lines, n["url"], files=attach(n, changed)))
             else:
                 out.append(ev("🔄", f"Updated {kind_name}", n["name"], lines, n["url"], cat="edits", files=attach(n, changed)))
     for mid, o in old.items():

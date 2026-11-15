@@ -301,7 +301,7 @@ class Engine:
         if self.logged_in and self.cfg is not None:
             self.crawl()
             if self.selftest == "files":
-                self.selftest_files()
+                self.selftest_files(os.environ.get("LMS_SELFTEST_CHANNEL", ""))
         if self.cfg is not None:
             try:
                 self.process_sis()
@@ -400,7 +400,10 @@ class Engine:
         for e in events:
             files = e.get("files") or []
             for f in files[:FILES_PER_EVENT]:
-                caption = f"📎 {esc(f['name'])}\n{esc(self.full(cid))} · {esc(e['title'])}"
+                caption = f"<b>{esc(self.full(cid))}</b>"
+                stem = f["name"].rsplit(".", 1)[0]
+                if e["title"] and e["title"] not in (f["name"], stem):  # Telegram already shows the file name
+                    caption += f"\n📁 {esc(e['title'])}"
                 try:
                     if f.get("size", 0) > limit:
                         raise TooBig()
@@ -418,8 +421,9 @@ class Engine:
             if len(files) > FILES_PER_EVENT:
                 self.deliver(p, f"📁 {len(files) - FILES_PER_EVENT} more file{'s' if len(files) - FILES_PER_EVENT != 1 else ''} in <b>{esc(e['title'])}</b>. Open it in Moodle from the alert above.")
 
-    def selftest_files(self):
-        """Manual test (Actions -> Run workflow -> self-test): send the newest file in your subjects to you only."""
+    def selftest_files(self, channel=""):
+        """Manual test (Actions -> Run workflow -> self-test): send the newest file in your subjects to you only,
+        or, when `channel` names a Discord channel in the panel, to that channel only."""
         owner = self.owner()
         best = None
         for cid in self.mine(owner) if owner else []:
@@ -432,9 +436,14 @@ class Engine:
         tm, cid, mod, key = best
         f = {"name": key.rsplit("/", 1)[-1], "size": mod["files"][key][0], "url": mod["furls"][key]}
         e = {"title": mod["name"], "files": [f]}
-        self.say_to(owner["id"], f"🧪 <b>File test</b>\nSending the newest file in your subjects: {esc(f['name'])} ({esc(fmt_size(f['size']))}).")
+        target = owner
+        if channel:
+            target = next((p for p in self.people() if self.is_discord(p) and p.get("name", "").strip().lower() == channel.strip().lower()), None)
+            if not target:
+                return self.log(f"selftest: no Discord channel named {channel!r} in the panel")
+        self.deliver(target, f"🧪 <b>File test</b>\nSending the newest file in your subjects: {esc(f['name'])} ({esc(fmt_size(f['size']))}).")
         sent_before = len(self._dl)
-        self.send_files(owner, cid, [e])
+        self.send_files(target, cid, [e])
         got = self._dl.get(f["url"])
         self.log(f"selftest: {f['name']!r} {fmt_size(f['size'])} downloaded={isinstance(got, bytes)}"
                  + (f" bytes={len(got)}" if isinstance(got, bytes) else f" error={type(got).__name__}") + f" new_downloads={len(self._dl) - sent_before}")

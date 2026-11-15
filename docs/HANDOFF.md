@@ -68,8 +68,8 @@ Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGR
    whether `grades skipped` appears. Forum posts have been 0 in every subject; each subject has exactly one
    forum, so either nobody posted or the discussions call fails (a fallback call was added).
 3. **Confirm the switches** suit him in the panel; adjust the category list if he wants finer control.
-4. **Install the extension**: `chrome://extensions` -> Developer mode -> Load unpacked -> the `extension`
-   folder (download the repo as ZIP first). Enter repo, GitHub key, data passphrase.
+4. **Install the extension** (in progress 2026-11-15): panel -> People -> Make extension code -> Save & check now;
+   `chrome://extensions` -> Developer mode -> Load unpacked -> the `extension` folder (repo ZIP); paste the code.
 5. **SIS**: owner logs in himself (CAPTCHA is never bypassed), opens the grades page, presses
    "Watch this page for grades". Then tune `parseTables` in `extension/lib.js` to the real page.
 
@@ -105,3 +105,8 @@ Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGR
   Grades tab shows for the owner only. "Open in tab" button. SIS page script removed from the manifest while SIS is
   skipped; the SIS code in background.js is dormant and needs owner keys again when SIS is resumed.
 - "Announcements & posts" switch renamed "Forum posts".
+
+Live check 2026-11-15 after this change: run succeeded, `forums found: 5 in 5 subjects`,
+`checked 5/5 subjects: 106 items, 0 forum posts, 0 failed`, no `grades skipped` (Moodle grades read works live).
+Owner's current subjects use only files, folders, assignment slots and an empty forum; marks for projects,
+assignments and quizzes are on Moodle; only midterm, lab and final are on the SIS.

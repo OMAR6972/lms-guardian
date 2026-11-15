@@ -140,7 +140,7 @@ Extension 0.3.0:
   when any SIS page is opened. Logged out = checks pause until a SIS page is opened again. Chrome sends the Lax
   session cookie on these requests (verified against a real local HTTPS server; Playwright route interception hides
   it, so don't trust routed tests for cookies).
-- Highlights NEW/CHANGED marks on subject pages and grades on the profile; 🎓 button opens the marks table.
+- Nothing is changed on SIS pages (owner asked: no highlights, no button). The page script only says "logged in now".
 - Grades tab (for everyone): table of current subjects (Midterm/Activities/Practical/Final), recent changes, past
   terms, plus Moodle marks for the owner. "Seen" state is per browser.
 - Owner only: GitHub key + data passphrase under ⚙ → writes `sis.enc` v2 (pages "marks"/"finals", rows

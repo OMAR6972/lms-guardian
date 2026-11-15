@@ -147,3 +147,39 @@ Extension 0.3.0:
   `[subject, label, value, url]`); the bot sends "Midterm released: CSE… — …" messages. Logged-out/stale warnings
   are off unless `settings.sisWarnings` is true in config.
 - Tests: `tests/fixtures/sis/` (fake pages, real markup), `test_sis_v2_messages_in_plain_words`.
+
+## Where we stopped (2026-11-15, 08:17 Cairo) — start here tomorrow
+
+Live now (main): bot with files-as-documents, extension codes/feeds, extension 0.3.1 (SIS marks read in the
+background, Grades tab, nothing changed on SIS pages). Omar installed 0.3.1; the Grades tab said
+"SIS marks read just now", so reading works in his real Chrome. He does NOT want SIS marks on Telegram for now
+(owner keys section left empty).
+
+To do, in order:
+1. **Friends choose subjects in Telegram** — code is on branch `wip-telegram-subjects` (not merged, not live).
+   Done there: /subjects picker (inline buttons ✅/⬜, owner-followed subjects + the friend's own), sent after a
+   friend connects; taps are collected per run into a set (repeated taps = one tap), applied once, one reply with
+   "Now following / Stopped following" lists, keyboard updated, owner told "X changed their subjects", config.enc
+   updated (panel shows it), st.sub updated so no extra "Now following" message; setMyCommands menu.
+   Still needed: tests (fake Telegram send must return message_id; edit_markup/answer_cb/set_commands fakes),
+   panel: on a 409 save conflict reload the config and ask to redo the change instead of overwriting a friend's
+   Telegram change; live check via a test person; Omar's rules: the bot must tell them the ~2-minute wait before
+   they tap (PICK_NOTE does), reply only once, several subjects in one message.
+2. **Update the friends' install guide** (install.html, English + Arabic): add the SIS part (log in to the SIS in
+   Chrome, Grades tab, marks table, nothing changes on SIS pages), the Telegram part (invite link → Start →
+   /subjects, wait ~2 min), and safe updating (replace files in the SAME folder and press ↻; never Remove, or the
+   code has to be entered again; two cards = new folder was loaded separately). Omar wants to send it to a friend.
+3. **Floating button on SIS pages**: Omar noticed it disappeared in 0.3.1 and called it broken. It was removed
+   together with the highlights after he said he didn't want things on the SIS pages. Ask: bring back just the
+   🎓 button (opens the marks table), or keep pages untouched.
+4. **New idea: advisor replies.** The extension should notice when the advisor sends/replies something on the SIS
+   (no notifications exist today). Candidate places to look first (seen in the SIS menu): My Advisor
+   (/dashboard/my_advisor), Notifications (/notifications?user=…, bell count), Suggestions and Complaints
+   (/tickets), My Requests (/my_requests), the "discuss" counter (/study/studies/discuss). Look at them live
+   with Omar logged in (read-only), then ask what counts as "the advisor replied".
+
+Lessons from today:
+- Playwright route interception drops cookies on extension service-worker requests; test cookies against a real
+  local HTTPS server (`--host-resolver-rules`), where Chrome does send the SIS Lax session cookie.
+- Commit author must not be Omar's Gmail (blocked); use OMAR6972@users.noreply.github.com.
+- Updating an unpacked extension: replace files in the same folder + ↻ keeps the code; Remove wipes it.

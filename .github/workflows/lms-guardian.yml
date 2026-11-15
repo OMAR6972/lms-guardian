@@ -37,10 +37,10 @@ jobs:
       - name: Save what the bot remembers
         if: ${{ !cancelled() }}
         run: |
-          if [ -n "$(git status --porcelain config.enc state.enc)" ]; then
+          if [ -n "$(git status --porcelain config.enc state.enc feeds)" ]; then
             git config user.name  "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add config.enc state.enc
+            git add -A config.enc state.enc feeds
             git commit -m "chore: bot memory"
             for i in 1 2 3; do git pull --rebase -X theirs && git push && break; sleep 3; done
           fi

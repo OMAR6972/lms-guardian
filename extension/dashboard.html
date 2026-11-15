@@ -32,19 +32,19 @@ input,select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var
 .filters input[type=search]{grid-column:1/-1}
 form{display:grid;gap:8px}
 .err{color:var(--bad)}
+body.tab{width:auto;max-width:780px;margin:0 auto;padding:20px 16px}
+body.tab .filters{grid-template-columns:repeat(4,1fr)}
 </style>
 </head>
 <body>
 <div class="row between">
-  <h1>LMS Guardian</h1>
-  <span class="row"><span class="mute" id="count"></span><button class="link" id="markAll" hidden>Mark all read</button><button class="link" id="gear" title="Keys">⚙</button></span>
+  <h1>LMS Guardian <span class="mute" id="who"></span></h1>
+  <span class="row"><span class="mute" id="count"></span><button class="link" id="markAll" hidden>Mark all read</button><button class="link" id="openTab" title="Open in a full tab">⤢ Open in tab</button><button class="link" id="gear" title="Change code">⚙</button></span>
 </div>
 
 <form id="setup" class="card" hidden>
-  <p class="mute">Enter the same keys you use in the panel. They stay in this browser only.</p>
-  <label>Repository<input id="repo" placeholder="OMAR6972/lms-guardian" autocomplete="off"></label>
-  <label>GitHub key<input id="token" type="password" autocomplete="off"></label>
-  <label>Data passphrase<input id="pass" type="password" autocomplete="off"></label>
+  <p class="mute">Paste your extension code. You get it from the LMS Guardian panel (People tab), or from the person who added you to the bot. It stays in this browser only.</p>
+  <label>Extension code<input id="code" type="password" autocomplete="off" spellcheck="false"></label>
   <div class="row"><button class="primary" type="submit">Save</button><span class="err" id="serr"></span></div>
 </form>
 

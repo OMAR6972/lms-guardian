@@ -1,4 +1,4 @@
-// Shared helpers: encryption (same format as lms/vault.py), GitHub file access, SIS table reading.
+// Shared helpers: encryption (same format as lms/vault.py), reading your feed, and (for later) SIS table reading.
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64d = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const b64e = (u) => { let s = ""; for (const b of u) s += String.fromCharCode(b); return btoa(s); };
@@ -21,8 +21,27 @@ export async function encrypt(obj, pass) {
   return JSON.stringify({ v: 1, salt: b64e(salt), iv: b64e(iv), ct: b64e(new Uint8Array(ct)) });
 }
 
+export const REPO = "OMAR6972/lms-guardian";
+
 export function settings() {
-  return chrome.storage.local.get(["token", "pass", "repo"]);
+  return chrome.storage.local.get(["code", "token", "pass", "repo"]);
+}
+
+/** File name of a person's feed; same rule as feed_id() in lms/engine.py. */
+export async function feedId(code) {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("lms-guardian-feed:" + code)));
+  return [...h].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 24);
+}
+/** Read this person's own feed (public repo, so no GitHub key needed). Only their code opens it. */
+export async function readFeed(code, fetcher = fetch) {
+  code = (code || "").trim();
+  if (code.length < 16) throw new Error("That code looks too short. Copy it again from the panel.");
+  const url = `https://raw.githubusercontent.com/${REPO}/main/feeds/${await feedId(code)}.enc?t=${Date.now()}`;
+  const r = await fetcher(url, { cache: "no-store" });
+  if (r.status === 404) throw new Error("No updates for this code yet. If it was just made, wait about 2 minutes and try again.");
+  if (!r.ok) throw new Error(`Could not reach GitHub (${r.status}).`);
+  try { return await decrypt(await r.text(), code); }
+  catch (e) { throw new Error("This code doesn't open the feed. Copy it again from the panel."); }
 }
 async function gh(cfg, path, opts = {}) {
   const r = await fetch(`https://api.github.com/repos/${cfg.repo}${path}`, {

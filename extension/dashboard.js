@@ -1,8 +1,8 @@
-import { settings, readEnc, eventId } from "./lib.js";
+import { settings, readFeed, eventId } from "./lib.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const CAT = { materials: "📄 Materials", edits: "🔄 Edits", assignments: "📝 Assignments", quizzes: "❓ Quizzes", posts: "📢 Announcements", grades: "🎯 Moodle grades", sis: "🎓 SIS grades" };
+const CAT = { materials: "📄 Materials", edits: "🔄 Edits", assignments: "📝 Assignments", quizzes: "❓ Quizzes", posts: "💬 Forum posts", grades: "🎯 Moodle grades", sis: "🎓 SIS grades" };
 const S = { st: null, read: {}, visits: [], tab: "new" };
 const when = (t) => new Date(t * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const full = (cid) => { const i = cid == null ? null : S.st.course_info[String(cid)]; return cid == null ? "SIS grades" : i ? `${i.code} — ${i.name}` : `course ${cid}`; };
@@ -68,13 +68,16 @@ async function markRead(ids) {
   render();
 }
 
+const IN_TAB = new URLSearchParams(location.search).has("tab");
+if (IN_TAB) { document.body.classList.add("tab"); $("openTab").hidden = true; }
+
 async function boot() {
   const cfg = await settings();
-  if (!cfg.token || !cfg.pass || !cfg.repo) { $("setup").hidden = false; $("app").hidden = true; return; }
+  if (!cfg.code) { $("setup").hidden = false; $("app").hidden = true; return; }
   $("msg").textContent = "Loading…";
   try {
-    S.st = await readEnc(cfg, "state.enc");
-  } catch (e) { $("msg").textContent = ""; $("setup").hidden = false; $("serr").textContent = e.message; return; }
+    S.st = await readFeed(cfg.code);
+  } catch (e) { $("msg").textContent = ""; $("setup").hidden = false; $("app").hidden = true; $("serr").textContent = e.message; return; }
   $("msg").textContent = "";
   if (!S.st) { $("msg").textContent = "The bot has not saved anything yet."; return; }
   const local = await chrome.storage.local.get(["read", "visits"]);
@@ -84,7 +87,9 @@ async function boot() {
   $("visit").innerHTML = S.visits.slice(0, -1).map((v, i) => `<option value="${i}">${i === 0 ? "Now" : new Date(v).toLocaleString()}</option>`).join("") || '<option value="0">Now</option>';
   const ids = [...new Set(events().map((e) => String(e.cid)))];
   $("fCourse").innerHTML = '<option value="">All subjects</option>' + ids.map((c) => `<option value="${esc(c)}">${esc(full(c === "null" ? null : c))}</option>`).join("");
-  $("fCat").innerHTML = '<option value="">All kinds</option>' + Object.entries(CAT).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  $("who").textContent = S.st.name ? "· " + S.st.name : "";
+  document.querySelector('.tabs button[data-tab="grades"]').hidden = !S.st.owner; // marks are the owner's only
+  $("fCat").innerHTML = '<option value="">All kinds</option>' + Object.entries(CAT).filter(([k]) => S.st.owner || (k !== "grades" && k !== "sis")).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("setup").hidden = true; $("app").hidden = false;
   render();
 }
@@ -97,11 +102,17 @@ document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
 ["q", "fCourse", "fCat", "fRead", "fDate", "visit"].forEach((id) => $(id).addEventListener("input", render));
 $("list").onclick = (e) => { const c = e.target.closest(".ev[data-id]"); if (c && c.classList.contains("unread")) markRead([c.dataset.id]); };
 $("markAll").onclick = () => markRead(events().map(eventId));
-$("gear").onclick = async () => { const c = await settings(); $("repo").value = c.repo || ""; $("setup").hidden = !$("setup").hidden; };
+$("gear").onclick = () => { $("code").value = ""; $("serr").textContent = ""; $("setup").hidden = !$("setup").hidden; };
+$("openTab").onclick = () => {
+  const url = chrome.runtime.getURL("dashboard.html?tab=1");
+  if (chrome.tabs && chrome.tabs.create) chrome.tabs.create({ url }); else window.open(url, "_blank");
+};
 $("setup").onsubmit = async (e) => {
   e.preventDefault();
-  const cur = await settings();
-  await chrome.storage.local.set({ repo: $("repo").value.trim(), token: $("token").value.trim() || cur.token || "", pass: $("pass").value || cur.pass || "" });
-  $("serr").textContent = ""; boot();
+  const code = $("code").value.trim();
+  if (!code) { const cur = await settings(); if (cur.code) { $("setup").hidden = true; return; } }
+  await chrome.storage.local.set({ code });
+  $("serr").textContent = ""; await boot();
+  chrome.runtime.sendMessage({ type: "refresh" });
 };
 boot();

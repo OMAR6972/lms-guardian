@@ -5,6 +5,7 @@ Data lives in two ENCRYPTED files (see vault.py):
   state.enc   what the bot remembers: snapshots, history, Telegram connections, Moodle token
 A recipient with a "discord" key is a Discord channel (webhook link); otherwise it is a Telegram person.
 """
+import hashlib
 import os
 import time
 
@@ -18,6 +19,12 @@ HISTORY_MAX = 600
 OWNER_ONLY = ("grades", "sis")  # personal: never sent to friends or Discord channels
 SIS_STALE_HOURS = 12
 RECENT_DAYS = 60  # first run only: pre-select subjects opened within this many days
+FEED_HISTORY = 300  # newest events kept in each person's extension feed
+
+
+def feed_id(code):
+    """File name of a person's extension feed. Derived from their code, so it reveals nothing about them."""
+    return hashlib.sha256(("lms-guardian-feed:" + code).encode("utf-8")).hexdigest()[:24]
 
 HELP = (
     "<b>LMS Guardian</b>\n\n"
@@ -42,6 +49,7 @@ class Engine:
     def __init__(self, moodle, tg, root=".", key="", now=None, log=print, dc=None):
         self.m, self.tg, self.log, self.key = moodle, tg, log, key
         self.dc = dc or Discord()
+        self.root = root
         self.cfg_path = os.path.join(root, "config.enc")
         self.st_path = os.path.join(root, "state.enc")
         self.sis_path = os.path.join(root, "sis.enc")  # written by the browser extension, only read here
@@ -292,6 +300,7 @@ class Engine:
                 self.process_sis()
             except vault.VaultError:
                 self.log("sis.enc could not be decrypted; ignoring it")
+            self.write_feeds()
         self.update_health()
 
     def crawl(self):
@@ -401,6 +410,56 @@ class Engine:
             rows.update(page["rows"])  # rows that vanish are kept: a half-loaded page must not erase history
             merged[key] = {"title": page["title"], "url": page["url"], "rows": rows}
         self.st["sis"] = merged
+
+    # ---------- browser extension feeds ----------
+    def build_feed(self, p):
+        """Only what this person may see: their subjects, their switches. Grades and SIS for the owner only."""
+        owner = bool(p.get("owner"))
+        info, courses = {}, {}
+        for cid in sorted(self.mine(p)):
+            key = str(cid)
+            if key in self.st["course_info"]:
+                info[key] = self.st["course_info"][key]
+            snap = self.st["courses"].get(key)
+            if not snap:
+                continue
+            c = {}
+            if self.wants(p, "assignments"):
+                c["assigns"] = {k: {"name": a["name"], "due": a["due"], "url": a.get("url", "")} for k, a in snap["assigns"].items()}
+            if self.wants(p, "quizzes"):
+                c["quizzes"] = {k: {"name": q["name"], "close": q["close"], "url": q.get("url", "")} for k, q in snap["quizzes"].items()}
+            if owner and self.wants(p, "grades") and snap.get("grades"):
+                c["grades"] = snap["grades"]
+            courses[key] = c
+        feed = {"v": 1, "name": p.get("name", ""), "owner": owner, "course_info": info, "courses": courses,
+                "history": self.my_history(p)[-FEED_HISTORY:]}
+        if owner and self.wants(p, "sis") and self.st.get("sis"):
+            feed["sis"] = self.st["sis"]
+        return feed
+
+    def write_feeds(self):
+        """One encrypted file per person with an extension code (feeds/<id>.enc). Written only when it changes."""
+        folder = os.path.join(self.root, "feeds")
+        want = {feed_id(p["ext"]): p for p in self.active_people()
+                if not self.is_discord(p) and isinstance(p.get("ext"), str) and len(p["ext"]) >= 16}
+        known = self.st.setdefault("feeds", {})
+        if want:
+            os.makedirs(folder, exist_ok=True)
+        for fid, p in want.items():
+            feed = self.build_feed(p)
+            digest = hashlib.sha256(vault.canonical(feed).encode("utf-8")).hexdigest()
+            path = os.path.join(folder, fid + ".enc")
+            if known.get(fid) != digest or not os.path.exists(path):
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(vault.encrypt(feed, p["ext"]) + "\n")
+                known[fid] = digest
+        if os.path.isdir(folder):
+            for name in os.listdir(folder):
+                if name.endswith(".enc") and name[:-4] not in want:
+                    os.remove(os.path.join(folder, name))  # person removed, paused, or given a new code
+        for fid in list(known):
+            if fid not in want:
+                del known[fid]
 
     def update_health(self):
         bad = (not self.logged_in) or self.crawl_failed_all

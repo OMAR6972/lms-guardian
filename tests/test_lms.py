@@ -478,3 +478,49 @@ def test_sis_intake(tmp_path):
     tg.sent.clear()
     run(tmp_path, m, tg, now=NOW + 13 * 3600)        # extension silent for 13 h
     assert "has not reported" in tg.texts()
+
+
+def test_extension_feeds_are_per_person_and_private(tmp_path):
+    from lms.engine import feed_id
+    m, tg = FakeMoodle(), FakeTelegram()
+    m.grades = {1: [{"id": 50, "itemname": "Midterm", "gradeformatted": "18.00", "grademax": 20}]}
+    run(tmp_path, m, tg)
+    c = cfg(tmp_path)
+    own_code, fr_code = "o" * 16 + "wnerCODE", "f" * 16 + "riendCODE"
+    c["people"][0].update(courses=[1, 2], ext=own_code)
+    fr = friend([2]); fr["ext"] = fr_code; fr["watch"] = {"assignments": False}
+    c["people"].append(fr)
+    c["people"].append({"id": "dA", "name": "Server", "active": True, "discord": HOOK_A, "courses": [1], "ext": "x" * 20})
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg)
+    m.assigns[1][0]["duedate"] += 3600
+    m.contents[2][0]["modules"][0]["name"] = "Syllabus v2"
+    run(tmp_path, m, tg)
+    files = sorted(p.name for p in (tmp_path / "feeds").glob("*.enc"))
+    assert files == sorted([feed_id(own_code) + ".enc", feed_id(fr_code) + ".enc"])   # Discord channels get none
+    read = lambda code: vault.decrypt((tmp_path / "feeds" / (feed_id(code) + ".enc")).read_text(), code)
+    with pytest.raises(vault.VaultError):
+        vault.decrypt((tmp_path / "feeds" / (feed_id(fr_code) + ".enc")).read_text(), own_code)
+    with pytest.raises(vault.VaultError):
+        vault.decrypt((tmp_path / "feeds" / (feed_id(fr_code) + ".enc")).read_text(), KEY)
+    o, f = read(own_code), read(fr_code)
+    assert o["owner"] and not f["owner"]
+    assert set(o["course_info"]) == {"1", "2"} and set(f["course_info"]) == {"2"}
+    assert o["courses"]["1"]["grades"]["50"]["grade"] == "18.00"
+    assert "grades" not in json.dumps(f["courses"]) and "assigns" not in json.dumps(f["courses"])
+    assert any("Syllabus v2" in h["text"] for h in f["history"])
+    assert all(h["cid"] == 2 for h in f["history"])                                   # nothing from course 1
+    assert o["courses"]["1"]["assigns"]["5"]["due"] == m.assigns[1][0]["duedate"]
+    # unchanged run: no rewrite (no commit churn)
+    before = {p.name: p.read_text() for p in (tmp_path / "feeds").glob("*.enc")}
+    run(tmp_path, m, tg)
+    assert before == {p.name: p.read_text() for p in (tmp_path / "feeds").glob("*.enc")}
+    # new code for the friend: old file disappears, old code stops working
+    c = cfg(tmp_path); c["people"][1]["ext"] = "n" * 16 + "ewCODE"; set_cfg(tmp_path, c)
+    run(tmp_path, m, tg)
+    assert not (tmp_path / "feeds" / (feed_id(fr_code) + ".enc")).exists()
+    assert read("n" * 16 + "ewCODE")["name"] == "Yousef"
+    # paused person: feed removed
+    c = cfg(tmp_path); c["people"][1]["active"] = False; set_cfg(tmp_path, c)
+    run(tmp_path, m, tg)
+    assert len(list((tmp_path / "feeds").glob("*.enc"))) == 1

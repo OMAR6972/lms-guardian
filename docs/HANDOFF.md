@@ -32,7 +32,8 @@ Panel (index.html) and extension both decrypt in the browser with the DATA_KEY p
 | `lms/vault.py` | AES-256-GCM + PBKDF2 (200k). Same format as the browser code |
 | `index.html` | Panel: Subjects (chip per recipient), People (Telegram people, Discord channels, what-to-watch switches), Activity |
 | `scheduler/` | Cloudflare Worker that dispatches the workflow |
-| `extension/` | Chrome extension (MV3): dashboard, floating Moodle icon, SIS page capture |
+| `extension/` | Chrome extension (MV3): dashboard (popup or full tab), floating Moodle bell. Opens with a per-person extension code |
+| `feeds/` | One encrypted file per person with an extension code: only their subjects and switches (marks for the owner only) |
 | `tests/test_lms.py` | 21 tests with fake Moodle/Telegram/Discord |
 
 Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `DATA_KEY`.
@@ -93,3 +94,14 @@ Secrets in GitHub Actions: `LMS_USER`, `LMS_PASS`, `TELEGRAM_BOT_TOKEN`, `TELEGR
   and through what the owner sees. This session's GitHub access could push code but not read Actions logs
   or set secrets.
 - The old private repo of the same name was replaced; if alerts ever arrive twice, check for a leftover.
+
+## 2026-11-15: extension reworked for several people
+
+- Panel, People tab: "Make extension code" / "Copy extension code" per Telegram person (owner too). A new code
+  replaces the old one; the old feed file is deleted at the next run.
+- The bot writes `feeds/<sha256("lms-guardian-feed:"+code)[:24]>.enc`, encrypted with that code, only when it changes.
+  Friends' feeds never contain marks, SIS, or other people's subjects.
+- The extension needs only the code (reads the feed from raw.githubusercontent.com; no GitHub key, no data passphrase).
+  Grades tab shows for the owner only. "Open in tab" button. SIS page script removed from the manifest while SIS is
+  skipped; the SIS code in background.js is dormant and needs owner keys again when SIS is resumed.
+- "Announcements & posts" switch renamed "Forum posts".

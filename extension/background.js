@@ -1,27 +1,29 @@
-// Service worker: keeps the unread badge fresh and sends SIS grade tables (encrypted) to the repo.
-import { settings, readEnc, writeEnc, parseTables, looksLoggedOut, pageKey, eventId } from "./lib.js";
+// Service worker: keeps the unread badge fresh.
+// The SIS part below is dormant while SIS is skipped: no SIS page script is loaded and it needs owner keys.
+import { settings, readFeed, writeEnc, parseTables, looksLoggedOut, pageKey, eventId } from "./lib.js";
 
 const CHECK_MINUTES = 5;        // how often watched SIS pages are re-read while the browser is open
 const HEARTBEAT_MS = 3 * 3600e3; // re-send unchanged data this often so the bot knows the extension is alive
 
-chrome.runtime.onInstalled.addListener(() => chrome.alarms.create("tick", { periodInMinutes: CHECK_MINUTES }));
+chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create("tick", { periodInMinutes: CHECK_MINUTES }); tick(); });
 chrome.runtime.onStartup.addListener(() => chrome.alarms.create("tick", { periodInMinutes: CHECK_MINUTES }));
 chrome.alarms.onAlarm.addListener((a) => { if (a.name === "tick") tick(); });
 
 async function ready() {
   const cfg = await settings();
-  return cfg.token && cfg.pass && cfg.repo ? cfg : null;
+  return cfg.code ? cfg : null;
 }
+const sisReady = (cfg) => cfg && cfg.token && cfg.pass && cfg.repo;
 
 async function tick() {
   const cfg = await ready();
   if (!cfg) return;
   await refreshBadge(cfg).catch(() => {});
-  await recheckSis(cfg).catch((e) => console.warn("sis recheck:", e.message));
+  if (sisReady(cfg)) await recheckSis(cfg).catch((e) => console.warn("sis recheck:", e.message));
 }
 
 async function refreshBadge(cfg) {
-  const st = await readEnc(cfg, "state.enc");
+  const st = await readFeed(cfg.code);
   const { read = {} } = await chrome.storage.local.get("read");
   const n = ((st && st.history) || []).filter((e) => !read[eventId(e)]).length;
   await chrome.storage.local.set({ unread: n });
@@ -71,7 +73,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       const { sisWatch = [] } = await chrome.storage.local.get("sisWatch");
       if (!sisWatch.includes(msg.url)) return reply({ watching: false });
       const sis = await recordPage(msg.url, msg.title, msg.html);
-      if (cfg) await pushSis(cfg, sis).catch((e) => console.warn(e.message));
+      if (sisReady(cfg)) await pushSis(cfg, sis).catch((e) => console.warn(e.message));
       reply({ watching: true, rows: Object.keys((sis.pages[pageKey(msg.url)] || {}).rows || {}).length });
     } else if (msg.type === "sisToggle") {
       let { sisWatch = [] } = await chrome.storage.local.get("sisWatch");

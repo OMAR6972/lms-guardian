@@ -246,7 +246,7 @@ function link(p) {
 }
 var HOOK = /^https:\/\/(?:(?:canary|ptb)\.)?(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/;
 var CATS = [["materials", "New materials & files"], ["edits", "Edits & removals"], ["assignments", "Assignments & deadlines"],
-  ["quizzes", "Quizzes"], ["posts", "Announcements & posts"]];
+  ["quizzes", "Quizzes"], ["posts", "Forum posts"]];
 var OWNER_CATS = [["grades", "Moodle grades"], ["sis", "SIS grades"]];
 function watchRow(p, i) {
   var cats = p.owner ? CATS.concat(OWNER_CATS) : CATS, w = p.watch || {};
@@ -267,6 +267,11 @@ function renderPeople() {
       extra = '<div class="row"><span class="badge ' + (on ? "ok" : "wait") + '">' + (on ? "connected on Telegram" : "waiting for them to tap the link") + "</span>" +
         (l ? '<button data-copy="' + i + '">Copy invite link</button><a href="https://wa.me/?text=' + encodeURIComponent("Get LMS alerts here: " + l) + '" target="_blank" rel="noopener"><button>Send on WhatsApp</button></a>'
            : '<span class="mute">Invite link appears after the bot\'s first run.</span>') + "</div>";
+    }
+    if (!isD) {
+      extra += '<div class="row"><span class="mute">Browser extension:</span>' + (p.ext
+        ? '<button data-ext="' + i + '">Copy extension code</button><button class="link" data-newext="' + i + '">' + (S.armedExt === i ? "Tap again: old code stops working" : "Make a new code") + "</button>"
+        : '<button data-newext="' + i + '">Make extension code</button>') + "</div>";
     }
     var rm = p.owner ? "" : '<button class="link danger" data-rm="' + i + '">' + (S.armed === i ? "Tap again to remove" : "Remove") + "</button>";
     var kind = p.owner ? "You (owner)" : isD ? "Discord channel" : "Telegram";
@@ -308,6 +313,16 @@ $("people").onclick = function (e) {
   if (t.dataset.copy !== undefined) {
     var l = link(people()[+t.dataset.copy]);
     (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function () { say("Invite link copied. Remember to Save first.", "ok"); }, function () { prompt("Copy this link", l); });
+  } else if (t.dataset.ext !== undefined) {
+    var code = people()[+t.dataset.ext].ext;
+    (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(function () {
+      say(S.dirty ? "Code copied. Press Save; it works in the extension after the next check (within 2 minutes)." : "Extension code copied.", "ok");
+    }, function () { prompt("Copy this extension code", code); });
+  } else if (t.dataset.newext !== undefined) {
+    var k = +t.dataset.newext, pe = people()[k];
+    if (pe.ext && S.armedExt !== k) { S.armedExt = k; renderPeople(); return; }
+    pe.ext = rid(16); S.armedExt = null; dirty(); renderPeople();
+    say("New extension code made. Copy it, then press Save.", "ok");
   } else if (t.dataset.rm !== undefined) {
     var i = +t.dataset.rm;
     if (S.armed === i) { people().splice(i, 1); S.armed = null; dirty(); renderAll(); } else { S.armed = i; renderPeople(); }

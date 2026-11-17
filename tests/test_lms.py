@@ -23,12 +23,25 @@ class FakeTelegram:
     def __init__(self):
         self.chat_id = OWNER_CHAT
         self.sent, self.queue, self.fail_for, self.docs = [], [], set(), []
+        self.markups, self.edits, self.answers, self.commands = [], [], [], None
 
     def send(self, text, markup=None, chat_id=None):
         chat = str(chat_id or self.chat_id)
         if chat in self.fail_for:
             raise TgError("boom")
         self.sent.append((chat, text))
+        if markup:
+            self.markups.append((chat, markup))
+        return {"message_id": 1000 + len(self.sent)}
+
+    def edit_markup(self, message_id, markup, chat_id=None):
+        self.edits.append((str(chat_id or self.chat_id), message_id, markup))
+
+    def answer_cb(self, cb_id, text=""):
+        self.answers.append((cb_id, text))
+
+    def set_commands(self, commands):
+        self.commands = commands
 
     def send_document(self, filename, data, caption="", chat_id=None):
         chat = str(chat_id or self.chat_id)
@@ -724,3 +737,59 @@ def test_sis_v2_messages_in_plain_words(tmp_path):
     tg.sent.clear()
     sis(); run(tmp_path, m, tg, dc=dc)
     assert tg.sent == []
+
+
+def tap(uid, chat, cid, cb=None):
+    return {"update_id": uid, "callback_query": {"id": cb or f"cb{uid}", "data": f"t:{cid}",
+            "message": {"chat": {"id": chat}, "message_id": 55}}}
+
+
+def test_friend_chooses_subjects_in_telegram(tmp_path):
+    m, tg = FakeMoodle(), FakeTelegram()
+    run(tmp_path, m, tg)
+    c = cfg(tmp_path)
+    c["people"][0]["courses"] = [1, 2]
+    c["people"].append(friend([2]))
+    set_cfg(tmp_path, c)
+    tg.queue = [{"update_id": 1, "message": {"chat": {"id": 777}, "text": "/start abc123"}}]
+    run(tmp_path, m, tg)
+    # the picker arrives after connecting, and it states the wait before they tap
+    assert any(chat == "777" and mk["inline_keyboard"] for chat, mk in tg.markups)
+    assert "next check" in tg.texts(777) and "once" in tg.texts(777)
+    assert tg.commands and tg.commands[0][0] == "subjects"
+    tg.sent.clear()
+    # tap course 1 five times and course 2 once: five taps are one tap
+    tg.queue += [tap(2, 777, 1)] + [tap(i, 777, 1) for i in range(3, 7)] + [tap(7, 777, 2)]
+    run(tmp_path, m, tg)
+    out = tg.texts(777)
+    assert out.count("Saved") == 1                        # one reply only
+    assert "Now following" in out and "Stopped following" in out
+    assert "CSE333s" in out and "CSE334s" in out
+    assert len(tg.answers) == 6 and tg.edits and tg.edits[-1][0] == "777"
+    assert "changed their subjects" in tg.texts(OWNER_CHAT)
+    assert [p for p in cfg(tmp_path)["people"] if p["id"] == "f1"][0]["courses"] == [1]
+    # nothing is announced a second time at the next run
+    tg.sent.clear()
+    run(tmp_path, m, tg)
+    assert "Now following" not in tg.texts(777)
+    # two taps on the same subject in one run count as one tap (removes it here)
+    tg.queue += [tap(8, 777, 1), tap(9, 777, 1)]
+    tg.sent.clear()
+    run(tmp_path, m, tg)
+    assert [p for p in cfg(tmp_path)["people"] if p["id"] == "f1"][0]["courses"] == []
+
+
+def test_picker_ignores_strangers_and_subjects_not_offered(tmp_path):
+    m, tg = FakeMoodle(), FakeTelegram()
+    run(tmp_path, m, tg)
+    c = cfg(tmp_path)
+    c["people"].append(friend([]))
+    set_cfg(tmp_path, c)
+    tg.queue = [{"update_id": 1, "message": {"chat": {"id": 777}, "text": "/start abc123"}},
+                tap(2, 999, 1),            # stranger
+                tap(3, 777, 12345)]        # a subject nobody follows
+    tg.sent.clear()
+    run(tmp_path, m, tg)
+    assert tg.texts(999) == ""
+    assert [p for p in cfg(tmp_path)["people"] if p["id"] == "f1"][0]["courses"] == []
+    assert "Saved" not in tg.texts(777)

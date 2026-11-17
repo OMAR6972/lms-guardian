@@ -179,10 +179,16 @@ function putConfig() {
   return encrypt(S.cfg, store("lmsPass")).then(function (enc) {
     var body = JSON.stringify({ message: "Update subjects and people", content: utf8b64(enc + "\n"), sha: S.sha, branch: "main" });
     return gh("/contents/config.enc", { method: "PUT", body: body }).then(function (r) {
-      if (r.status === 409 || r.status === 422) {  // someone committed in between: take the new sha and retry once
+      if (r.status === 409 || r.status === 422) {
+        // The bot saved a newer config in between (for example a friend changed subjects in Telegram).
+        // Never overwrite it with this older copy: load the newer one and ask for the change to be redone.
         return loadConfig().then(function (cur) {
-          S.sha = cur.sha;
-          return gh("/contents/config.enc", { method: "PUT", body: JSON.stringify({ message: "Update subjects and people", content: utf8b64(enc + "\n"), sha: S.sha, branch: "main" }) });
+          return decrypt(atob(cur.content.replace(/\n/g, "")), store("lmsPass")).then(function (c) {
+            S.sha = cur.sha; S.cfg = c; S.cfg.people = S.cfg.people || []; S.dirty = false; renderAll();
+            var err = new Error("The bot saved a newer version while you were editing (for example, a friend changed their subjects in Telegram). Your last change was NOT saved. The newest version is loaded now. Please make the change again and save.");
+            err.conflict = true;
+            throw err;
+          });
         });
       }
       return r;

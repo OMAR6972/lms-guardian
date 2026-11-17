@@ -223,9 +223,11 @@ function loadStatus() {
 
 /* ---------- rendering ---------- */
 function people() { return S.cfg.people; }
+function accts() { return (S.state && S.state.accts) || {}; }
 function courses() {
-  var ci = (S.state && S.state.course_info) || {};
-  return Object.keys(ci).map(function (id) { return { id: +id, code: ci[id].code, name: ci[id].name }; })
+  var ci = (S.state && S.state.course_info) || {}, own = S.state && S.state.owner_enrolled;
+  var keys = Object.keys(ci).filter(function (id) { return !own || own.indexOf(+id) >= 0; }); // not friends' own subjects
+  return keys.map(function (id) { return { id: +id, code: ci[id].code, name: ci[id].name }; })
     .sort(function (a, b) { return a.code < b.code ? -1 : a.code > b.code ? 1 : 0; });
 }
 function follows(p, id) { return (p.courses || []).indexOf(id) >= 0; }
@@ -240,6 +242,7 @@ function renderSubjects() {
     return (!q || (c.code + " " + c.name).toLowerCase().indexOf(q) >= 0) && (!only || anyFollows(c.id));
   }).map(function (c) {
     var chips = people().map(function (p, i) {
+      if (accts()[p.id]) return ""; // they choose their own subjects in Telegram (own Moodle account)
       return '<button class="chip' + (p.active === false ? " off" : "") + '" data-c="' + c.id + '" data-p="' + i + '" aria-pressed="' + follows(p, c.id) + '">' + ("discord" in p ? "# " : "") + esc(p.name || "?") + "</button>";
     }).join("");
     return '<div class="card cs"><div class="ct"><span class="code">' + esc(c.code) + '</span><span class="mute">' + esc(c.name) + '</span></div><div class="chips">' + chips + "</div></div>";
@@ -274,6 +277,12 @@ function renderPeople() {
       extra = '<div class="row"><span class="badge ' + (on ? "ok" : "wait") + '">' + (on ? "connected on Telegram" : "waiting for them to tap the link") + "</span>" +
         (l ? '<button data-copy="' + i + '">Copy invite link</button><a href="https://wa.me/?text=' + encodeURIComponent("Get LMS alerts here: " + l) + '" target="_blank" rel="noopener"><button>Send on WhatsApp</button></a>'
            : '<span class="mute">Invite link appears after the bot\'s first run.</span>') + "</div>";
+    }
+    if (!isD && !p.owner && chats[p.id]) {
+      var a = accts()[p.id];
+      extra += '<div class="row"><span class="badge ' + (a ? (a.dead ? "wait" : "ok") : "wait") + '">' +
+        (a ? (a.dead ? "own Moodle: token stopped working" : "own Moodle account connected · reads " + Object.keys(a.info || {}).length + " subjects") : "uses your subject list") + "</span>" +
+        (a ? '<span class="mute">They pick subjects in Telegram (/subjects).</span>' : "") + "</div>";
     }
     if (!isD) {
       extra += '<div class="row"><span class="mute">Browser extension:</span>' + (p.ext

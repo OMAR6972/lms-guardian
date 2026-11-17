@@ -27,6 +27,11 @@ b{font-weight:700}
 .btn{display:inline-block;background:var(--acc);color:var(--acc-fg);text-decoration:none;font-weight:700;border-radius:12px;padding:10px 18px}
 .note{border-inline-start:4px solid var(--warn);padding-inline-start:12px}
 .copy{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--panel2);color:inherit;border-radius:8px;padding:2px 8px;cursor:pointer;margin-inline-start:6px}
+.tabs{display:flex;gap:6px;overflow-x:auto;position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;margin:0 -2px;scrollbar-width:thin}
+.tabs button{font:inherit;font-size:.92rem;white-space:nowrap;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--acc);color:var(--acc-fg);border-color:var(--acc);font-weight:700}
+.nav{display:flex;justify-content:flex-end}.nav .btn{border:0;font:inherit;font-weight:700;cursor:pointer}
+ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-weight:600}
 </style>
 </head>
 <body>
@@ -39,8 +44,11 @@ b{font-weight:700}
     </div>
   </div>
 
+  <nav class="tabs" id="tabs" role="tablist"><button role="tab" data-s="overview" data-en="Overview" data-ar="نظرة عامة">Overview</button><button role="tab" data-s="bot" data-en="The bot" data-ar="البوت">The bot</button><button role="tab" data-s="ext" data-en="The extension" data-ar="الإضافة">The extension</button><button role="tab" data-s="sis" data-en="SIS marks" data-ar="درجات الـ SIS">SIS marks</button><button role="tab" data-s="install" data-en="Install" data-ar="التثبيت">Install</button><button role="tab" data-s="own" data-en="Your own subjects" data-ar="موادك (اختياري)">Your own subjects</button><button role="tab" data-s="help" data-en="Help & updates" data-ar="مساعدة وتحديث">Help & updates</button></nav>
+
   <!-- ============ ENGLISH ============ -->
-  <section id="en" lang="en" dir="ltr" class="card" style="background:none;border:0;padding:0">
+  <section id="en" lang="en" dir="ltr" style="display:grid;gap:14px">
+    <div class="sec" data-s="overview" hidden>
     <div class="card">
       <h2>What is LMS Guardian?</h2>
       <p>Your faculty's Moodle (LMS) and the SIS don't tell you when something changes: you have to keep checking. LMS Guardian checks for you, every couple of minutes, and tells you. It has two parts that work together:</p>
@@ -49,7 +57,10 @@ b{font-weight:700}
         <li><b>The browser extension</b> (this page). A small dashboard in Chrome with everything in one place, and it also reads your <b>SIS marks</b>.</li>
       </ul>
     </div>
-
+    <div class="card"><h2>Where to go next</h2><ol class="map"><li><a href="#bot" data-go="bot">The bot</a></li><li><a href="#ext" data-go="ext">The extension</a></li><li><a href="#sis" data-go="sis">SIS marks</a></li><li><a href="#install" data-go="install">Install</a></li><li><a href="#own" data-go="own">Your own subjects</a></li><li><a href="#help" data-go="help">Help & updates</a></li></ol></div>
+    <div class="nav"><button class="btn next" data-go="bot">Next: The bot →</button></div>
+    </div>
+    <div class="sec" data-s="bot" hidden>
     <div class="card">
       <h2>What the bot does for you (Moodle / LMS)</h2>
       <ul>
@@ -61,7 +72,9 @@ b{font-weight:700}
       <p><b>You choose the subjects.</b> Send <code>/subjects</code> to the bot and tap the ✅/⬜ buttons. <b>Be patient:</b> the bot checks about every <b>2 minutes</b>, so it applies your taps at its next check and replies <b>once</b> with everything you changed. Tapping the same subject twice before it replies counts as one tap.</p>
       <p class="mute">The bot only reads Moodle: it can't change anything there, and it never needs your Moodle password.</p>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="ext">Next: The extension →</button></div>
+    </div>
+    <div class="sec" data-s="ext" hidden>
     <div class="card">
       <h2>What the extension does for you</h2>
       <ul>
@@ -71,7 +84,9 @@ b{font-weight:700}
         <li>On SIS pages there's a 🎓 button in the bottom-right corner that opens your marks. Nothing else on the SIS pages is changed.</li>
       </ul>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="sis">Next: SIS marks →</button></div>
+    </div>
+    <div class="sec" data-s="sis" hidden>
     <div class="card">
       <h2>How the SIS part works (please read)</h2>
       <p>Unlike Moodle, the SIS has a <b>CAPTCHA</b> at login, so nobody (not even the bot) can log in for you. That's why the SIS marks come from <b>your own Chrome</b>:</p>
@@ -89,40 +104,36 @@ b{font-weight:700}
         <li>Desktop Chrome only: there's no phone version.</li>
       </ul>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="install">Next: Install →</button></div>
+    </div>
+    <div class="sec" data-s="install" hidden>
     <div class="card">
       <h2>Install it: about 5 minutes</h2>
       <p class="mute"><b>You need:</b> Google Chrome on a computer (not a phone), and your <b>extension code</b>: a long code of letters and numbers that whoever added you sends you. Keep it to yourself; it opens your updates.</p>
     </div>
-
     <div class="card step"><span class="num">1</span><h2>Connect the bot (Telegram)</h2>
       <div><p>Open the <b>invite link</b> you were sent, press <b>Start</b>, then send <code>/subjects</code> and choose your subjects. Wait about 2 minutes for the reply. (You'll only see Omar's subjects. If yours are different, see the optional step below.)</p></div></div>
-
     <div class="card step"><span class="num">2</span><h2>Download</h2>
       <div><a class="btn" href="https://github.com/OMAR6972/lms-guardian/archive/refs/heads/main.zip">⬇ Download the extension (ZIP)</a>
       <p class="mute" style="margin-top:6px">You get a file called <code>lms-guardian-main.zip</code>.</p></div></div>
-
     <div class="card step"><span class="num">3</span><h2>Unzip it somewhere permanent</h2>
       <div><p>Open your <b>Downloads</b> folder, right-click the ZIP, choose <b>Extract All…</b>, change the place to your <b>Documents</b> folder and press <b>Extract</b>. On a Mac, double-click the ZIP and drag the new folder into Documents.</p>
       <p class="mute">Chrome runs the extension from this folder, so don't delete or move it later.</p></div></div>
-
     <div class="card step"><span class="num">4</span><h2>Turn on Developer mode</h2>
       <div><p>In Chrome, type <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">copy</button> in the address bar and press Enter. Turn on <b>Developer mode</b> (top right).</p></div></div>
-
     <div class="card step"><span class="num">5</span><h2>Load the extension</h2>
       <div><p>Press <b>Load unpacked</b> (top left). Go to <b>Documents → lms-guardian-main</b>, click the folder named <b><code>extension</code></b> once, and press <b>Select Folder</b>.</p>
       <p class="mute">A card called <b>LMS Guardian</b> with a blue bell appears.</p></div></div>
-
     <div class="card step"><span class="num">6</span><h2>Pin it</h2>
       <div><p>Press the puzzle-piece icon 🧩 next to the address bar, then the pin 📌 next to <b>LMS Guardian</b>.</p></div></div>
-
     <div class="card step"><span class="num">7</span><h2>Enter your code</h2>
       <div><p>Click the blue bell on the toolbar, paste your extension code, and press <b>Save</b>.</p>
       <p class="mute">You'll see your name at the top and your updates.</p></div></div>
-
     <div class="card step"><span class="num">8</span><h2>Log in to the SIS (for marks)</h2>
       <div><p>Open the SIS in Chrome and log in as usual. Within a minute, open the <b>Grades</b> tab in the extension: your marks appear there. Keep Chrome open and the extension keeps you logged in.</p></div></div>
-
+    <div class="nav"><button class="btn next" data-go="own">Next: Your own subjects →</button></div>
+    </div>
+    <div class="sec" data-s="own" hidden>
     <div class="card">
       <h2>Optional: your subjects are different from Omar's?</h2>
       <p class="note"><b>Heads-up:</b> this bot was made by and for <b>Omar Samir</b>. By default it can only follow <b>Omar's subjects</b>, so <code>/subjects</code> only lists the subjects Omar is registered in. If you registered in different subjects, or a few of yours are not on his list, you'll miss those, unless you do this optional step:</p>
@@ -132,10 +143,12 @@ b{font-weight:700}
         <li>Press <b>Copy</b>, open the bot in Telegram and send it the line it shows: <code>/connect …</code>. The bot <b>deletes your message right away</b> and keeps the token encrypted.</li>
         <li>Within about 2 minutes the bot confirms. From then on it reads <b>your own</b> Moodle, <code>/subjects</code> lists <b>your</b> subjects (the ones you opened in the last ~5 months), and alerts are for your subjects only. You'll also get <b>your own Moodle marks</b> (projects, assignments, quizzes) when they're posted.</li>
       </ol>
-      <p><b>Be sure before you do it.</b> The bot (and Omar) never get your email or password: those stay in your own browser. What the bot keeps is the <b>token</b>, which is Moodle's mobile-app key, so in principle it can do what the Moodle app can do. The bot's own code only ever makes <b>read</b> requests and refuses anything else (the code is public on GitHub), and it reads your subjects, files, deadlines, forum posts and <b>your own marks</b>. But Omar runs the bot and could in principle use the token himself, and it passes through Telegram. Only do it if you're comfortable with that. You can stop any time: send <code>/disconnect</code> to the bot, and in Moodle you can also reset the key under <b>Profile → Preferences → Security keys</b>.</p>
+      <p><b>About your privacy.</b> The bot never gets your email or password: they stay in your own browser. All it keeps is the token, stored encrypted, and its code only ever makes <b>read</b> requests (the code is public on GitHub). <b>Omar isn't interested in anyone's grades or data</b>, doesn't look at them, and wouldn't even know how to. This bot is only meant to send you your own alerts. You can stop any time: send <code>/disconnect</code> to the bot, and in Moodle you can also reset the key under <b>Profile → Preferences → Security keys</b>.</p>
       <p class="mute">Not doing this is fine: you keep getting alerts for the subjects you have in common with Omar. This step needs extension version 0.5.0 or newer (see "Updating later" below).</p>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="help">Next: Help & updates →</button></div>
+    </div>
+    <div class="sec" data-s="help" hidden>
     <div class="card">
       <h2>If something goes wrong</h2>
       <ul>
@@ -151,10 +164,12 @@ b{font-weight:700}
       <p class="note"><b>Never press "Remove"</b> on the card: that erases your code and you'd have to enter it again. And if you see <b>two</b> LMS Guardian cards, you loaded a second copy from a different folder: remove the extra one and keep the one you set up first.</p>
     </div>
     <p class="mute note">Privacy: the extension never asks for your Moodle or SIS password. Your Moodle updates come from a locked file that only your own code opens (your subjects and nothing else). Your SIS marks are read by your own Chrome and stay in it.</p>
+    </div>
   </section>
 
   <!-- ============ ARABIC ============ -->
-  <section id="ar" lang="ar" dir="rtl" class="card" style="background:none;border:0;padding:0" hidden>
+  <section id="ar" lang="ar" dir="rtl" style="display:grid;gap:14px" hidden>
+    <div class="sec" data-s="overview" hidden>
     <div class="card">
       <h2>إيه هو LMS Guardian؟</h2>
       <p>الـ Moodle (الـ LMS) بتاع الكلية والـ SIS مابيقولوش لك لما حاجة تتغير، لازم تفضل تدخل تشوف. LMS Guardian بيشيّك بدالك كل شوية، وبيبلّغك. وهو من جزئين شغالين مع بعض:</p>
@@ -163,7 +178,10 @@ b{font-weight:700}
         <li><b>إضافة المتصفح</b> (الصفحة دي): لوحة صغيرة في Chrome فيها كل حاجة في مكان واحد، وكمان بتقرا <b>درجات الـ SIS</b> بتاعتك.</li>
       </ul>
     </div>
-
+    <div class="card"><h2>روح فين بعد كده</h2><ol class="map"><li><a href="#bot" data-go="bot">البوت</a></li><li><a href="#ext" data-go="ext">الإضافة</a></li><li><a href="#sis" data-go="sis">درجات الـ SIS</a></li><li><a href="#install" data-go="install">التثبيت</a></li><li><a href="#own" data-go="own">موادك (اختياري)</a></li><li><a href="#help" data-go="help">مساعدة وتحديث</a></li></ol></div>
+    <div class="nav"><button class="btn next" data-go="bot">التالي: البوت ←</button></div>
+    </div>
+    <div class="sec" data-s="bot" hidden>
     <div class="card">
       <h2>البوت بيعمل إيه لك (Moodle / LMS)</h2>
       <ul>
@@ -175,7 +193,9 @@ b{font-weight:700}
       <p><b>إنت اللي بتختار المواد.</b> ابعت <code>/subjects</code> للبوت واضغط على أزرار ✅/⬜. <b>استحمل شوية:</b> البوت بيشيّك تقريباً كل <b>دقيقتين</b>، فبيطبّق اللي ضغطت عليه في الفحص الجاي وبيرد عليك <b>مرة واحدة</b> بكل التغييرات. لو ضغطت على نفس المادة مرتين قبل ما يرد، بتتحسب ضغطة واحدة.</p>
       <p class="mute">البوت بيقرا Moodle بس: مايقدرش يغيّر أي حاجة هناك، وعمره ما بيحتاج باسورد Moodle بتاعك.</p>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="ext">التالي: الإضافة ←</button></div>
+    </div>
+    <div class="sec" data-s="ext" hidden>
     <div class="card">
       <h2>الإضافة بتعمل إيه لك</h2>
       <ul>
@@ -185,7 +205,9 @@ b{font-weight:700}
         <li>على صفحات الـ SIS فيه زرار 🎓 في الركن اللي تحت بيفتح درجاتك. وماعدا كده مفيش أي حاجة في صفحات الـ SIS بتتغيّر.</li>
       </ul>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="sis">التالي: درجات الـ SIS ←</button></div>
+    </div>
+    <div class="sec" data-s="sis" hidden>
     <div class="card">
       <h2>إزاي جزء الـ SIS بيشتغل (اقراه كويس)</h2>
       <p>عكس Moodle، الـ SIS فيه <b>كابتشا</b> وقت تسجيل الدخول، فمفيش حد (ولا حتى البوت) يقدر يسجّل دخول بدالك. عشان كده درجات الـ SIS بتتقري من <b>الـ Chrome بتاعك إنت</b>:</p>
@@ -203,40 +225,36 @@ b{font-weight:700}
         <li>Chrome على الكمبيوتر بس: مفيش نسخة للموبايل.</li>
       </ul>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="install">التالي: التثبيت ←</button></div>
+    </div>
+    <div class="sec" data-s="install" hidden>
     <div class="card">
       <h2>التثبيت: حوالي 5 دقايق</h2>
       <p class="mute"><b>محتاج:</b> متصفح Google Chrome على كمبيوتر (مش موبايل)، و<b>كود الإضافة</b> بتاعك: كود طويل من حروف وأرقام بيبعتهولك اللي ضافك. خليه معاك بس، لأنه بيفتح تحديثاتك.</p>
     </div>
-
     <div class="card step"><span class="num">1</span><h2>وصّل البوت (تيليجرام)</h2>
       <div><p>افتح <b>لينك الدعوة</b> اللي اتبعتلك، واضغط <b>Start</b>، وبعدين ابعت <code>/subjects</code> واختار موادك. استنى حوالي دقيقتين لحد ما يرد. (هتشوف مواد عمر بس. لو موادك مختلفة شوف الخطوة الاختيارية تحت.)</p></div></div>
-
     <div class="card step"><span class="num">2</span><h2>التحميل</h2>
       <div><a class="btn" href="https://github.com/OMAR6972/lms-guardian/archive/refs/heads/main.zip">⬇ تحميل الإضافة (ZIP)</a>
       <p class="mute" style="margin-top:6px">هينزل ملف اسمه <code>lms-guardian-main.zip</code>.</p></div></div>
-
     <div class="card step"><span class="num">3</span><h2>فك الضغط في مكان ثابت</h2>
       <div><p>افتح فولدر <b>Downloads</b>، اضغط كليك يمين على ملف الـ ZIP واختار <b>Extract All…</b> (استخراج الكل)، غيّر المكان لفولدر <b>Documents</b> (المستندات) واضغط <b>Extract</b>. على الماك: دبل كليك على الملف واسحب الفولدر الجديد لـ Documents.</p>
       <p class="mute">Chrome بيشغّل الإضافة من الفولدر ده، فما تمسحوش وما تنقلوش بعد كده.</p></div></div>
-
     <div class="card step"><span class="num">4</span><h2>شغّل وضع المطوّر</h2>
       <div><p>في Chrome اكتب <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">نسخ</button> في شريط العنوان واضغط Enter. شغّل زرار <b>Developer mode</b> (وضع مطوّر البرامج) فوق على الجنب.</p></div></div>
-
     <div class="card step"><span class="num">5</span><h2>حمّل الإضافة</h2>
       <div><p>اضغط <b>Load unpacked</b> (تحميل الإضافة غير المضغوطة). روح لـ <b>Documents ← lms-guardian-main</b>، واضغط مرة واحدة على الفولدر اللي اسمه <b><code>extension</code></b>، وبعدين <b>Select Folder</b> (اختيار مجلد).</p>
       <p class="mute">هيظهر كارت اسمه <b>LMS Guardian</b> عليه جرس أزرق.</p></div></div>
-
     <div class="card step"><span class="num">6</span><h2>ثبّتها في الشريط</h2>
       <div><p>اضغط على أيقونة قطعة البازل 🧩 جنب شريط العنوان، وبعدين الدبوس 📌 جنب <b>LMS Guardian</b>.</p></div></div>
-
     <div class="card step"><span class="num">7</span><h2>اكتب الكود بتاعك</h2>
       <div><p>اضغط على الجرس الأزرق في الشريط، والصق كود الإضافة، واضغط <b>Save</b>.</p>
       <p class="mute">هتلاقي اسمك فوق وتحديثاتك تحته.</p></div></div>
-
     <div class="card step"><span class="num">8</span><h2>سجّل دخول الـ SIS (عشان الدرجات)</h2>
       <div><p>افتح الـ SIS في Chrome وسجّل دخول عادي. في خلال دقيقة افتح تاب <b>Grades</b> في الإضافة: درجاتك هتظهر هناك. سيب Chrome مفتوح والإضافة هتفضّلك مسجّل.</p></div></div>
-
+    <div class="nav"><button class="btn next" data-go="own">التالي: موادك (اختياري) ←</button></div>
+    </div>
+    <div class="sec" data-s="own" hidden>
     <div class="card">
       <h2>اختياري: موادك مختلفة عن مواد عمر؟</h2>
       <p class="note"><b>تنبيه:</b> البوت ده معمول بواسطة <b>عمر سمير</b> ولعمر. وبشكل افتراضي بيتابع بس <b>مواد عمر</b>، فـ <code>/subjects</code> بيعرض بس المواد اللي عمر مسجّلها. لو إنت مسجّل مواد مختلفة، أو كام مادة عندك مش في قايمته، مش هيجيلك عنها حاجة، إلا لو عملت الخطوة الاختيارية دي:</p>
@@ -246,10 +264,12 @@ b{font-weight:700}
         <li>اضغط <b>Copy</b>، وافتح البوت في تيليجرام وابعتله السطر اللي ظهر: <code>/connect …</code>. البوت <b>بيمسح رسالتك فوراً</b> وبيحفظ التوكن مشفّر.</li>
         <li>في خلال حوالي دقيقتين البوت بيأكد. من بعدها بيقرا <b>Moodle بتاعك إنت</b>، و<code>/subjects</code> بيعرض <b>موادك إنت</b> (اللي فتحتها في آخر 5 شهور تقريباً)، والتنبيهات لموادك بس. وكمان هيجيلك <b>درجاتك إنت على Moodle</b> (المشاريع والأسايمنتات والكويزات) لما تنزل.</li>
       </ol>
-      <p><b>اتأكد قبل ما تعمل كده.</b> البوت (وعمر) عمرهم ما بياخدوا الإيميل ولا الباسورد بتوعك: دول بيفضلوا في متصفحك إنت. اللي البوت بيحتفظ بيه هو <b>التوكن</b>، وده مفتاح تطبيق Moodle للموبايل، يعني نظرياً يقدر يعمل اللي تطبيق Moodle بيعمله. كود البوت نفسه بيبعت طلبات <b>قراءة</b> بس وبيرفض أي حاجة تانية (والكود مفتوح على GitHub)، وبيقرا موادك وملفاتك ومواعيدك وبوستات الفورم و<b>درجاتك إنت</b>. لكن عمر هو اللي مشغّل البوت وممكن نظرياً يستخدم التوكن بنفسه، وكمان التوكن بيعدّي على تيليجرام. اعمل كده بس لو مرتاح للموضوع ده. تقدر توقف في أي وقت: ابعت <code>/disconnect</code> للبوت، وفي Moodle كمان تقدر تلغي المفتاح من <b>Profile ← Preferences ← Security keys</b>.</p>
+      <p><b>بخصوص خصوصيتك.</b> البوت عمره ما بياخد الإيميل ولا الباسورد بتوعك: دول بيفضلوا في متصفحك إنت. اللي بيحتفظ بيه بس هو التوكن، متخزّن مشفّر، وكود البوت بيبعت طلبات <b>قراءة</b> بس (والكود مفتوح على GitHub). <b>عمر مش مهتم بدرجات حد ولا بيانات حد</b>، ومابيبصش عليها، وأصلاً مايعرفش يعمل كده. البوت ده معمول بس عشان يبعتلك إنت تنبيهاتك. تقدر توقف في أي وقت: ابعت <code>/disconnect</code> للبوت، وفي Moodle كمان تقدر تلغي المفتاح من <b>Profile ← Preferences ← Security keys</b>.</p>
       <p class="mute">لو ماعملتش الخطوة دي مفيش مشكلة: هتفضل تيجيلك تنبيهات المواد المشتركة مع عمر. الخطوة دي محتاجة نسخة الإضافة 0.5.0 أو أحدث (شوف "التحديث بعد كده" تحت).</p>
     </div>
-
+    <div class="nav"><button class="btn next" data-go="help">التالي: مساعدة وتحديث ←</button></div>
+    </div>
+    <div class="sec" data-s="help" hidden>
     <div class="card">
       <h2>لو حصلت مشكلة</h2>
       <ul>
@@ -265,27 +285,43 @@ b{font-weight:700}
       <p class="note"><b>ماتضغطش "Remove" أبداً</b> على الكارت: ده بيمسح الكود بتاعك وهتكتبه من الأول. ولو لقيت <b>كارتين</b> LMS Guardian يبقى حمّلت نسخة تانية من فولدر مختلف: امسح الزيادة وسيب اللي ظبطته الأول.</p>
     </div>
     <p class="mute note">الخصوصية: الإضافة عمرها ما بتطلب باسورد Moodle ولا باسورد الـ SIS. تحديثات Moodle بتيجي من ملف مقفول ما بيفتحوش غير كودك إنت (موادك وبس). ودرجات الـ SIS بيقراها الـ Chrome بتاعك وبتفضل فيه.</p>
+    </div>
   </section>
 </main>
 <script>
 (function () {
-  function pick(l) {
-    document.getElementById("en").hidden = l !== "en";
-    document.getElementById("ar").hidden = l !== "ar";
-    document.documentElement.lang = l; document.documentElement.dir = l === "ar" ? "rtl" : "ltr";
-    document.querySelectorAll(".lang button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.l === l); });
-    try { localStorage.setItem("lmsGuideLang", l); } catch (e) {}
+  var ORDER = ["overview", "bot", "ext", "sis", "install", "own", "help"], lang = "en", sec = "overview";
+  function render() {
+    document.getElementById("en").hidden = lang !== "en";
+    document.getElementById("ar").hidden = lang !== "ar";
+    document.documentElement.lang = lang; document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    document.querySelectorAll(".lang button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.l === lang); });
+    document.querySelectorAll("#tabs button").forEach(function (b) { b.textContent = b.dataset[lang]; b.setAttribute("aria-selected", b.dataset.s === sec); });
+    document.querySelectorAll(".sec").forEach(function (d) { d.hidden = d.dataset.s !== sec; });
   }
+  function go(s, scroll) {
+    sec = ORDER.indexOf(s) >= 0 ? s : "overview"; render();
+    try { history.replaceState(null, "", "#" + sec); } catch (e) {}
+    if (scroll !== false) window.scrollTo({ top: 0, behavior: "smooth" });
+    var t = document.querySelector('#tabs button[aria-selected="true"]'); if (t && t.scrollIntoView) t.scrollIntoView({ inline: "center", block: "nearest" });
+  }
+  function pick(l) { lang = l; try { localStorage.setItem("lmsGuideLang", l); } catch (e) {} render(); }
   var saved = ""; try { saved = localStorage.getItem("lmsGuideLang") || ""; } catch (e) {}
   var q = new URLSearchParams(location.search).get("lang");
-  pick(q === "ar" || q === "en" ? q : saved || ((navigator.language || "").slice(0, 2) === "ar" ? "ar" : "en"));
+  lang = q === "ar" || q === "en" ? q : saved || ((navigator.language || "").slice(0, 2) === "ar" ? "ar" : "en");
   document.querySelectorAll(".lang button").forEach(function (b) { b.onclick = function () { pick(b.dataset.l); }; });
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-go]"); if (t) { e.preventDefault(); go(t.dataset.go); return; }
+    var tb = e.target.closest("#tabs button"); if (tb) go(tb.dataset.s);
+  });
   document.querySelectorAll("[data-copy]").forEach(function (b) {
     b.onclick = function () {
       var t = b.textContent;
       (navigator.clipboard ? navigator.clipboard.writeText(b.dataset.copy) : Promise.reject()).then(function () { b.textContent = "✓"; setTimeout(function () { b.textContent = t; }, 1500); });
     };
   });
+  window.addEventListener("hashchange", function () { go(location.hash.slice(1), false); });
+  go(location.hash.slice(1), false);
 })();
 </script>
 </body>

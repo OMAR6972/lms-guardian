@@ -242,7 +242,6 @@ function renderSubjects() {
     return (!q || (c.code + " " + c.name).toLowerCase().indexOf(q) >= 0) && (!only || anyFollows(c.id));
   }).map(function (c) {
     var chips = people().map(function (p, i) {
-      if (accts()[p.id]) return ""; // they choose their own subjects in Telegram (own Moodle account)
       return '<button class="chip' + (p.active === false ? " off" : "") + '" data-c="' + c.id + '" data-p="' + i + '" aria-pressed="' + follows(p, c.id) + '">' + ("discord" in p ? "# " : "") + esc(p.name || "?") + "</button>";
     }).join("");
     return '<div class="card cs"><div class="ct"><span class="code">' + esc(c.code) + '</span><span class="mute">' + esc(c.name) + '</span></div><div class="chips">' + chips + "</div></div>";
@@ -259,7 +258,7 @@ var CATS = [["materials", "New materials & files"], ["edits", "Edits & removals"
   ["quizzes", "Quizzes"], ["posts", "Forum posts"]];
 var OWNER_CATS = [["grades", "Moodle grades"], ["sis", "SIS grades"]];
 function watchRow(p, i) {
-  var cats = p.owner ? CATS.concat(OWNER_CATS) : CATS, w = p.watch || {};
+  var cats = p.owner ? CATS.concat(OWNER_CATS) : accts()[p.id] ? CATS.concat([OWNER_CATS[0]]) : CATS, w = p.watch || {};
   return '<div><p class="mute">Gets alerts about:</p><div class="chips">' + cats.map(function (c) {
     return '<label class="sw"><input type="checkbox" data-w="' + i + ":" + c[0] + '"' + (w[c[0]] !== false ? " checked" : "") + "> " + c[1] + "</label>";
   }).join("") + "</div></div>";
@@ -282,7 +281,7 @@ function renderPeople() {
       var a = accts()[p.id];
       extra += '<div class="row"><span class="badge ' + (a ? (a.dead ? "wait" : "ok") : "wait") + '">' +
         (a ? (a.dead ? "own Moodle: token stopped working" : "own Moodle account connected · reads " + Object.keys(a.info || {}).length + " subjects") : "uses your subject list") + "</span>" +
-        (a ? '<span class="mute">They pick subjects in Telegram (/subjects).</span>' : "") + "</div>";
+        (a ? '<span class="mute">They can also pick subjects in Telegram (/subjects). Only subjects in their own Moodle count.</span>' : "") + "</div>";
     }
     if (!isD) {
       extra += '<div class="row"><span class="mute">Browser extension:</span>' + (p.ext

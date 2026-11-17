@@ -39,7 +39,7 @@ PICK_NOTE = ("⏳ <b>Changes aren't instant.</b> I apply taps at my next check, 
 HELP = (
     "<b>LMS Guardian</b>\n\n"
     "/subjects – choose which subjects you follow\n"
-    "/connect – use your own Moodle account (if your subjects differ)\n"
+    "/connect – use your own Moodle account (if your subjects differ; also gives you your Moodle marks)\n"
     "/disconnect – go back to the shared subject list\n"
     "/courses – your subjects\n"
     "/upcoming – deadlines and quizzes coming up\n"
@@ -104,8 +104,10 @@ class Engine:
 
     def wants(self, p, cat):
         """Does this recipient get this kind of event? Missing switch = on. Grades/SIS: owner only."""
-        if cat in OWNER_ONLY and not p.get("owner"):
+        if cat == "sis" and not p.get("owner"):
             return False
+        if cat == "grades" and not (p.get("owner") or self.acct(p)):
+            return False  # Moodle marks: the owner's, or a person's OWN marks read with their own account
         return (p.get("watch") or {}).get(cat, True)
 
     def tracked(self):
@@ -170,7 +172,7 @@ class Engine:
         self.st["sub"][p["id"]] = []   # so the next run tells them what they now follow
         self.reply(chat, "✅ <b>Your own Moodle account is connected.</b>\n"
                    f"I deleted your message with the token. You follow {len(recent)} subject{'s' if len(recent) != 1 else ''} you opened recently, "
-                   "read from <b>your</b> Moodle from now on. I'll tell you within about 2 minutes, then use /subjects to change them.")
+                   "read from <b>your</b> Moodle from now on, and you'll also get your own Moodle marks when they're posted. I'll tell you within about 2 minutes, then use /subjects to change them.")
         owner = self.owner()
         if owner and owner["id"] != p["id"]:
             self.say_to(owner["id"], f"👤 <b>{esc(p['name'])}</b> connected their own Moodle account.")
@@ -547,7 +549,7 @@ class Engine:
             for key in list(a["courses"]):
                 if int(key) not in on:
                     del a["courses"][key]
-            snaps, failed = snapshot.build(m, on, a["courses"], self.log, grades=False)
+            snaps, failed = snapshot.build(m, on, a["courses"], self.log, grades=self.wants(p, "grades"))
             self.log(f"account {p['id']}: checked {len(snaps)}/{len(on)} subjects, {len(failed)} failed")
             self._cur = m
             try:
@@ -752,10 +754,10 @@ class Engine:
                 c["assigns"] = {k: {"name": a["name"], "due": a["due"], "url": a.get("url", "")} for k, a in snap["assigns"].items()}
             if self.wants(p, "quizzes"):
                 c["quizzes"] = {k: {"name": q["name"], "close": q["close"], "url": q.get("url", "")} for k, q in snap["quizzes"].items()}
-            if owner and self.wants(p, "grades") and snap.get("grades"):
+            if self.wants(p, "grades") and snap.get("grades"):
                 c["grades"] = snap["grades"]
             courses[key] = c
-        feed = {"v": 1, "name": p.get("name", ""), "owner": owner, "course_info": info, "courses": courses,
+        feed = {"v": 1, "name": p.get("name", ""), "owner": owner, "grades_on": self.wants(p, "grades"), "course_info": info, "courses": courses,
                 "history": self.my_history(p)[-FEED_HISTORY:]}
         if owner and self.wants(p, "sis") and self.st.get("sis"):
             feed["sis"] = self.st["sis"]

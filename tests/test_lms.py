@@ -233,7 +233,7 @@ def test_detects_changes_once(tmp_path):
     m.discs[1].append({"discussion": 7, "subject": "Section moved", "message": "<p>Room B3</p>", "created": NOW})
     run(tmp_path, m, tg)
     txt = tg.texts(OWNER_CHAT)
-    assert "Fri 20 Nov 2026, 11:59 PM → Tue 17 Nov 2026, 11:59 PM" in txt and "3 days earlier" in txt
+    assert "Due date moved 3 days earlier: now Tue 17 Nov 2026, 11:59 PM (was Fri 20 Nov 2026, 11:59 PM)" in txt
     assert "New file: lec2.pdf" in txt and "File replaced/updated: lec1.pdf" in txt
     assert "New quiz" in txt and "30 min" in txt and "New announcement" in txt and "Room B3" in txt
     tg.sent.clear()
@@ -470,7 +470,7 @@ def test_moodle_grades_owner_only_and_silent_baseline(tmp_path):
     run(tmp_path, m, tg, dc=dc)
     t = tg.texts(OWNER_CHAT)
     assert "New grade" in t and "Quiz 1" in t and "9.00 / 10" in t
-    assert "Grade changed" in t and "18.00 / 20 → 19.00 / 20" in t
+    assert "Grade changed" in t and "Now 19.00 / 20 (was 18.00 / 20)" in t
     assert dc.sent == []                              # grades never go to channels or friends
     tg.sent.clear()
     m.fail_grades = True
@@ -737,7 +737,7 @@ def test_sis_v2_messages_in_plain_words(tmp_path):
     tg.sent.clear()
     marks["rows"]["CSE336s|Midterm"][2] = "18 / 20"
     sis(); run(tmp_path, m, tg, dc=dc)
-    assert "Midterm changed" in tg.texts() and "17 / 20 → 18 / 20" in tg.texts()
+    assert "Midterm changed" in tg.texts() and "Now 18 / 20 (was 17 / 20)" in tg.texts()
     tg.sent.clear()
     sis(); run(tmp_path, m, tg, dc=dc)
     assert tg.sent == []
@@ -817,6 +817,7 @@ def friend_moodle():
          "description": "", "contents": []}]}]
     f.contents[9] = []
     f.assigns[3], f.assigns[9], f.discs[3], f.discs[9] = [], [], [], []
+    f.grades = {3: [{"id": 70, "itemname": "Project proposal", "gradeformatted": "-", "grademax": 10}]}
     return f
 
 
@@ -894,3 +895,42 @@ def test_connect_is_for_known_people_only(tmp_path):
     tg.sent.clear()
     run(tmp_path, m, tg, mk=mk)
     assert state(tmp_path)["accts"] == {} and "already reads Moodle" in tg.texts(OWNER_CHAT)
+
+
+def test_connected_friend_gets_their_own_moodle_marks(tmp_path):
+    m, tg, fm = FakeMoodle(), FakeTelegram(), friend_moodle()
+    def mk(t):
+        c = fm if t == FRIEND_TOKEN else FakeMoodle()
+        c.token = t
+        return c
+    m.grades = {1: [{"id": 50, "itemname": "Midterm", "gradeformatted": "18.00", "grademax": 20}]}
+    run(tmp_path, m, tg, mk=mk)
+    c = cfg(tmp_path)
+    c["people"][0]["courses"] = [1]
+    c["people"].append(friend([1]))
+    set_cfg(tmp_path, c)
+    tg.queue = [{"update_id": 1, "message": {"chat": {"id": 777}, "text": "/start abc123"}},
+                {"update_id": 2, "message": {"chat": {"id": 777}, "message_id": 9, "text": f"/connect {FRIEND_TOKEN}"}}]
+    run(tmp_path, m, tg, mk=mk)
+    run(tmp_path, m, tg, mk=mk)                       # baseline of their marks: silent
+    tg.sent.clear()
+    fm.grades[3][0]["gradeformatted"] = "8.00"       # the doctor posts THEIR mark
+    run(tmp_path, m, tg, mk=mk)
+    assert "New grade" in tg.texts(777) and "Project proposal" in tg.texts(777) and "8.00 / 10" in tg.texts(777)
+    assert "Project proposal" not in tg.texts(OWNER_CHAT)       # not the owner's business
+    m.grades[1][0]["gradeformatted"] = "5.00"       # the owner's own mark changes: never goes to the friend
+    tg.sent.clear()
+    run(tmp_path, m, tg, mk=mk)
+    assert "Midterm" in tg.texts(OWNER_CHAT) and "Midterm" not in tg.texts(777)
+    # their extension feed carries their marks (and nobody else's)
+    import glob
+    feeds = glob.glob(str(tmp_path / "feeds" / "*.enc"))
+    # the friend has no extension code in this test, so give them one and check the feed content
+    c = cfg(tmp_path)
+    c["people"][1]["ext"] = "x" * 20
+    set_cfg(tmp_path, c)
+    run(tmp_path, m, tg, mk=mk)
+    from lms.engine import feed_id
+    feed = vault.load(str(tmp_path / "feeds" / (feed_id("x" * 20) + ".enc")), "x" * 20)[0]
+    assert feed["grades_on"] and feed["courses"]["3"]["grades"]["70"]["grade"] == "8.00"
+    assert "1" not in {k for k, v in feed["courses"].items() if v.get("grades")}

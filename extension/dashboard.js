@@ -162,7 +162,7 @@ async function boot() {
   const ids = [...new Set(events().map((e) => String(e.cid)))];
   $("fCourse").innerHTML = '<option value="">All subjects</option>' + ids.map((c) => `<option value="${esc(c)}">${esc(full(c === "null" ? null : c))}</option>`).join("");
   $("who").textContent = S.st.name ? "· " + S.st.name : "";
-  $("fCat").innerHTML = '<option value="">All kinds</option>' + Object.entries(CAT).filter(([k]) => S.st.owner || (k !== "grades" && k !== "sis")).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  $("fCat").innerHTML = '<option value="">All kinds</option>' + Object.entries(CAT).filter(([k]) => S.st.owner || (k === "grades" ? S.st.grades_on : k !== "sis")).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("setup").hidden = true; $("app").hidden = false;
   document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.tab === S.tab));
   render();

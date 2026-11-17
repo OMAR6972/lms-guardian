@@ -130,9 +130,9 @@ b{font-weight:700}
         <li>Open the extension and press <b>🔗 My Moodle</b>.</li>
         <li>Enter your <b>Moodle email and password</b> and press <b>Get my token</b>. They are used once, inside your own browser, to ask Moodle for a personal <b>token</b>; they are never saved or sent anywhere else.</li>
         <li>Press <b>Copy</b>, open the bot in Telegram and send it the line it shows: <code>/connect …</code>. The bot <b>deletes your message right away</b> and keeps the token encrypted.</li>
-        <li>Within about 2 minutes the bot confirms. From then on it reads <b>your own</b> Moodle, <code>/subjects</code> lists <b>your</b> subjects (the ones you opened in the last ~5 months), and alerts are for your subjects only.</li>
+        <li>Within about 2 minutes the bot confirms. From then on it reads <b>your own</b> Moodle, <code>/subjects</code> lists <b>your</b> subjects (the ones you opened in the last ~5 months), and alerts are for your subjects only. You'll also get <b>your own Moodle marks</b> (projects, assignments, quizzes) when they're posted.</li>
       </ol>
-      <p><b>Be sure before you do it:</b> the token lets the bot <b>read</b> your Moodle as you (subjects, files, deadlines, forums). It can't change anything, and it is not your password, but it does pass through Telegram and Omar runs the bot. Only do it if you're comfortable with that. You can leave it any time: send <code>/disconnect</code> to the bot, and in Moodle you can also reset it under <b>Profile → Preferences → Security keys</b>.</p>
+      <p><b>Be sure before you do it.</b> The bot (and Omar) never get your email or password: those stay in your own browser. What the bot keeps is the <b>token</b>, which is Moodle's mobile-app key, so in principle it can do what the Moodle app can do. The bot's own code only ever makes <b>read</b> requests and refuses anything else (the code is public on GitHub), and it reads your subjects, files, deadlines, forum posts and <b>your own marks</b>. But Omar runs the bot and could in principle use the token himself, and it passes through Telegram. Only do it if you're comfortable with that. You can stop any time: send <code>/disconnect</code> to the bot, and in Moodle you can also reset the key under <b>Profile → Preferences → Security keys</b>.</p>
       <p class="mute">Not doing this is fine: you keep getting alerts for the subjects you have in common with Omar. This step needs extension version 0.5.0 or newer (see "Updating later" below).</p>
     </div>
 
@@ -244,9 +244,9 @@ b{font-weight:700}
         <li>افتح الإضافة واضغط <b>🔗 My Moodle</b>.</li>
         <li>اكتب <b>إيميل Moodle وباسورده</b> واضغط <b>Get my token</b>. بيتستخدموا مرة واحدة جوه متصفحك إنت عشان يطلبوا من Moodle <b>توكن</b> شخصي، ومابيتحفظوش ولا بيتبعتوا لأي مكان تاني.</li>
         <li>اضغط <b>Copy</b>، وافتح البوت في تيليجرام وابعتله السطر اللي ظهر: <code>/connect …</code>. البوت <b>بيمسح رسالتك فوراً</b> وبيحفظ التوكن مشفّر.</li>
-        <li>في خلال حوالي دقيقتين البوت بيأكد. من بعدها بيقرا <b>Moodle بتاعك إنت</b>، و<code>/subjects</code> بيعرض <b>موادك إنت</b> (اللي فتحتها في آخر 5 شهور تقريباً)، والتنبيهات لموادك بس.</li>
+        <li>في خلال حوالي دقيقتين البوت بيأكد. من بعدها بيقرا <b>Moodle بتاعك إنت</b>، و<code>/subjects</code> بيعرض <b>موادك إنت</b> (اللي فتحتها في آخر 5 شهور تقريباً)، والتنبيهات لموادك بس. وكمان هيجيلك <b>درجاتك إنت على Moodle</b> (المشاريع والأسايمنتات والكويزات) لما تنزل.</li>
       </ol>
-      <p><b>اتأكد قبل ما تعمل كده:</b> التوكن بيخلّي البوت <b>يقرا</b> Moodle بتاعك بحسابك (المواد والملفات والمواعيد والفورم). مايقدرش يغيّر أي حاجة، وهو مش الباسورد، بس بيعدّي على تيليجرام وعمر هو اللي مشغّل البوت. اعمل كده بس لو مرتاح للموضوع ده. تقدر تخرج في أي وقت: ابعت <code>/disconnect</code> للبوت، وفي Moodle كمان تقدر تلغيه من <b>Profile ← Preferences ← Security keys</b>.</p>
+      <p><b>اتأكد قبل ما تعمل كده.</b> البوت (وعمر) عمرهم ما بياخدوا الإيميل ولا الباسورد بتوعك: دول بيفضلوا في متصفحك إنت. اللي البوت بيحتفظ بيه هو <b>التوكن</b>، وده مفتاح تطبيق Moodle للموبايل، يعني نظرياً يقدر يعمل اللي تطبيق Moodle بيعمله. كود البوت نفسه بيبعت طلبات <b>قراءة</b> بس وبيرفض أي حاجة تانية (والكود مفتوح على GitHub)، وبيقرا موادك وملفاتك ومواعيدك وبوستات الفورم و<b>درجاتك إنت</b>. لكن عمر هو اللي مشغّل البوت وممكن نظرياً يستخدم التوكن بنفسه، وكمان التوكن بيعدّي على تيليجرام. اعمل كده بس لو مرتاح للموضوع ده. تقدر توقف في أي وقت: ابعت <code>/disconnect</code> للبوت، وفي Moodle كمان تقدر تلغي المفتاح من <b>Profile ← Preferences ← Security keys</b>.</p>
       <p class="mute">لو ماعملتش الخطوة دي مفيش مشكلة: هتفضل تيجيلك تنبيهات المواد المشتركة مع عمر. الخطوة دي محتاجة نسخة الإضافة 0.5.0 أو أحدث (شوف "التحديث بعد كده" تحت).</p>
     </div>
 

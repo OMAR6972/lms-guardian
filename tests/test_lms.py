@@ -233,7 +233,7 @@ def test_detects_changes_once(tmp_path):
     m.discs[1].append({"discussion": 7, "subject": "Section moved", "message": "<p>Room B3</p>", "created": NOW})
     run(tmp_path, m, tg)
     txt = tg.texts(OWNER_CHAT)
-    assert "Due date moved 3 days earlier: now Tue 17 Nov 2026, 11:59 PM (was Fri 20 Nov 2026, 11:59 PM)" in txt
+    assert "Due date" in txt and "Before: Fri 20 Nov 2026, 11:59 PM" in txt and "Now: Tue 17 Nov 2026, 11:59 PM" in txt and "3 days earlier" in txt
     assert "New file: lec2.pdf" in txt and "File replaced/updated: lec1.pdf" in txt
     assert "New quiz" in txt and "30 min" in txt and "New announcement" in txt and "Room B3" in txt
     tg.sent.clear()
@@ -470,7 +470,7 @@ def test_moodle_grades_owner_only_and_silent_baseline(tmp_path):
     run(tmp_path, m, tg, dc=dc)
     t = tg.texts(OWNER_CHAT)
     assert "New grade" in t and "Quiz 1" in t and "9.00 / 10" in t
-    assert "Grade changed" in t and "Now 19.00 / 20 (was 18.00 / 20)" in t
+    assert "Grade changed" in t and "Before: 18.00 / 20" in t and "Now: 19.00 / 20" in t
     assert dc.sent == []                              # grades never go to channels or friends
     tg.sent.clear()
     m.fail_grades = True
@@ -737,7 +737,7 @@ def test_sis_v2_messages_in_plain_words(tmp_path):
     tg.sent.clear()
     marks["rows"]["CSE336s|Midterm"][2] = "18 / 20"
     sis(); run(tmp_path, m, tg, dc=dc)
-    assert "Midterm changed" in tg.texts() and "Now 18 / 20 (was 17 / 20)" in tg.texts()
+    assert "Midterm changed" in tg.texts() and "Before: 17 / 20" in tg.texts() and "Now: 18 / 20" in tg.texts()
     tg.sent.clear()
     sis(); run(tmp_path, m, tg, dc=dc)
     assert tg.sent == []

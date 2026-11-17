@@ -50,12 +50,19 @@ HELP = (
 
 
 def render_event(e):
+    """One message block. A line with a line break inside is a small titled block (bold title, blank line before it)."""
     lines = [f"{e['emoji']} <b>{esc(e['kind'])}</b>: {esc(e['title'])}"]
+    blocks = False
     for l in e["lines"]:
-        lines.append("   " + esc(l).replace("\n", "\n   "))
+        if "\n" in l:
+            head, rest = l.split("\n", 1)
+            blocks = True
+            lines += ["", f"   <b>{esc(head)}</b>"] + ["      " + esc(r) for r in rest.split("\n")]
+        else:
+            lines.append("   " + esc(l))
     if e["url"]:
         where = "SIS" if e.get("cat") == "sis" else "Moodle"
-        lines.append(f'   🔗 <a href="{esc(e["url"], quote=True)}">Open in {where}</a>')
+        lines += ([""] if blocks else []) + [f'   🔗 <a href="{esc(e["url"], quote=True)}">Open in {where}</a>']
     return "\n".join(lines)
 
 

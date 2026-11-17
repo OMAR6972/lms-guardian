@@ -29,17 +29,16 @@ def attach(mod, keys):
 
 
 def date_change(label, old, new):
-    """One plain line per change: 'Due date moved 3 days later: now <new> (was <old>)'."""
+    """A small titled block (first line = title): Due date / Before / Now / how far it moved."""
     if old == new:
         return None
     if not old:
-        return f"{label} set: {fmt_ts(new)}"
+        return f"{label} set\nNow: {fmt_ts(new)}"
     if not new:
-        return f"{label} removed (was {fmt_ts(old)})"
+        return f"{label} removed\nWas: {fmt_ts(old)}"
     secs = new - old
-    way = f"{fmt_delta(secs)} later" if secs > 0 else f"{fmt_delta(secs)} earlier"
-    verb = "moved " if label.startswith(("Due", "Closes", "Cut")) else ""
-    return f"{label} {verb}{way}: now {fmt_ts(new)} (was {fmt_ts(old)})"
+    way = f"{fmt_delta(secs)} later (postponed)" if secs > 0 else f"{fmt_delta(secs)} earlier (moved up)"
+    return f"{label}\nBefore: {fmt_ts(old)}\nNow: {fmt_ts(new)}\n{way}"
 
 
 def diff_modules(old, new):
@@ -59,10 +58,10 @@ def diff_modules(old, new):
             continue
         lines, only_new_files, changed = [], True, []
         if o["name"] != n["name"]:
-            lines.append(f"Renamed from \"{o['name']}\" to \"{n['name']}\"")
+            lines.append(f"Renamed\nBefore: {o['name']}\nNow: {n['name']}")
             only_new_files = False
         if o["desc"] != n["desc"]:
-            lines.append("Description edited" + (f": {n['snip'][:140]}" if n["snip"] else ""))
+            lines.append("Description edited" + (f"\n{n['snip'][:140]}" if n["snip"] else ""))
             only_new_files = False
         for key, (sz, tm) in n["files"].items():
             if key not in o["files"]:
@@ -105,13 +104,13 @@ def diff_assigns(old, new):
             continue
         lines = []
         if o["name"] != n["name"]:
-            lines.append(f"Renamed from \"{o['name']}\" to \"{n['name']}\"")
+            lines.append(f"Renamed\nBefore: {o['name']}\nNow: {n['name']}")
         for label, key in (("Due date", "due"), ("Opens", "from"), ("Cut-off", "cutoff")):
             c = date_change(label, o[key], n[key])
             if c:
                 lines.append(c)
         if o["desc"] != n["desc"]:
-            lines.append("Requirements edited" + (f": {n['snip'][:140]}" if n["snip"] else ""))
+            lines.append("Requirements edited" + (f"\n{n['snip'][:140]}" if n["snip"] else ""))
         if lines:
             out.append(ev("⏰" if any("Due" in l for l in lines) else "✏️", "Assignment changed", n["name"], lines, n["url"], cat="assignments"))
     for aid, o in old.items():
@@ -136,15 +135,15 @@ def diff_quizzes(old, new):
             continue
         lines = []
         if o["name"] != n["name"]:
-            lines.append(f"Renamed from \"{o['name']}\" to \"{n['name']}\"")
+            lines.append(f"Renamed\nBefore: {o['name']}\nNow: {n['name']}")
         for label, key in (("Opens", "open"), ("Closes", "close")):
             c = date_change(label, o[key], n[key])
             if c:
                 lines.append(c)
         if o["limit"] != n["limit"]:
-            lines.append(f"Time limit changed: now {n['limit'] // 60} min (was {o['limit'] // 60} min)")
+            lines.append(f"Time limit\nBefore: {o['limit'] // 60} min\nNow: {n['limit'] // 60} min")
         if o["desc"] != n["desc"]:
-            lines.append("Instructions edited" + (f": {n['snip'][:140]}" if n["snip"] else ""))
+            lines.append("Instructions edited" + (f"\n{n['snip'][:140]}" if n["snip"] else ""))
         if lines:
             out.append(ev("⏰", "Quiz changed", n["name"], lines, n["url"], cat="quizzes"))
     for qid, o in old.items():
@@ -184,7 +183,7 @@ def diff_grades(old, new):
         if _has(n) and not _has(o):
             out.append(ev("🎯", "New grade", n["name"], [f"Grade: {_grade_text(n)}"], n.get("url", ""), cat="grades"))
         elif _has(n) and _has(o) and (o["grade"], o.get("max")) != (n["grade"], n.get("max")):
-            out.append(ev("🎯", "Grade changed", n["name"], [f"Now {_grade_text(n)} (was {_grade_text(o)})"], n.get("url", ""), cat="grades"))
+            out.append(ev("🎯", "Grade changed", n["name"], [f"Before: {_grade_text(o)}", f"Now: {_grade_text(n)}"], n.get("url", ""), cat="grades"))
         elif _has(o) and not _has(n):
             out.append(ev("🎯", "Grade removed", n["name"], [f"Was: {_grade_text(o)}"], n.get("url", ""), cat="grades"))
     return out
@@ -208,7 +207,7 @@ def diff_sis(old, new):
                 if was is None or was.startswith("-"):
                     out.append(ev("🎓", f"{label} released", subject, [value], url, cat="sis"))
                 else:
-                    out.append(ev("🎓", f"{label} changed", subject, [f"Now {value} (was {was})"], url, cat="sis"))
+                    out.append(ev("🎓", f"{label} changed", subject, [f"Before: {was}", f"Now: {value}"], url, cat="sis"))
             continue
         title = page.get("title") or "SIS"
         for rk, cells in page.get("rows", {}).items():
@@ -217,8 +216,8 @@ def diff_sis(old, new):
                 out.append(ev("🎓", "New SIS entry", label, [" · ".join(c for c in cells if c)[:300], f"Page: {title}"], page.get("url", ""), cat="sis"))
             elif orows[rk] != cells:
                 out.append(ev("🎓", "SIS entry changed", label,
-                              ["Now: " + " · ".join(c for c in cells if c)[:250],
-                               "Was: " + " · ".join(c for c in orows[rk] if c)[:250], f"Page: {title}"], page.get("url", ""), cat="sis"))
+                              ["Before: " + " · ".join(c for c in orows[rk] if c)[:250],
+                               "Now: " + " · ".join(c for c in cells if c)[:250], f"Page: {title}"], page.get("url", ""), cat="sis"))
     return out
 
 

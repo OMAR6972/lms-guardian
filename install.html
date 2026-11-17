@@ -32,6 +32,9 @@ b{font-weight:700}
 .tabs button[aria-selected=true]{background:var(--acc);color:var(--acc-fg);border-color:var(--acc);font-weight:700}
 .nav{display:flex;justify-content:flex-end}.nav .btn{border:0;font:inherit;font-weight:700;cursor:pointer}
 ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-weight:600}
+.warn{border:2px solid #c23b3b;background:var(--panel)}
+.warn h2{color:#c23b3b}
+@media (prefers-color-scheme:dark){.warn{border-color:#ff9a92}.warn h2{color:#ff9a92}}
 </style>
 </head>
 <body>
@@ -107,6 +110,11 @@ ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-we
     <div class="nav"><button class="btn next" data-go="install">Next: Install →</button></div>
     </div>
     <div class="sec" data-s="install" hidden>
+    <div class="card warn">
+      <h2>⚠️ Never delete the extension folder</h2>
+      <p>The folder you unzip (<code>lms-guardian-main</code>) <b>is</b> the extension: Chrome runs it from there. <b>Never delete it, rename it, or move it</b>, not even after it's installed. If you do, the extension stops working and you have to install it again from the start.</p>
+      <p>It's fine to delete the downloaded <b>ZIP file</b> once you've unzipped it, but <b>keep the unzipped folder</b> forever. Put it somewhere safe like Documents, and when you clean up your Downloads folder, make sure it's not in there.</p>
+    </div>
     <div class="card">
       <h2>Install it: about 5 minutes</h2>
       <p class="mute"><b>You need:</b> Google Chrome on a computer (not a phone), and your <b>extension code</b>: a long code of letters and numbers that whoever added you sends you. Keep it to yourself; it opens your updates.</p>
@@ -118,7 +126,7 @@ ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-we
       <p class="mute" style="margin-top:6px">You get a file called <code>lms-guardian-main.zip</code>.</p></div></div>
     <div class="card step"><span class="num">3</span><h2>Unzip it somewhere permanent</h2>
       <div><p>Open your <b>Downloads</b> folder, right-click the ZIP, choose <b>Extract All…</b>, change the place to your <b>Documents</b> folder and press <b>Extract</b>. On a Mac, double-click the ZIP and drag the new folder into Documents.</p>
-      <p class="mute">Chrome runs the extension from this folder, so don't delete or move it later.</p></div></div>
+      <p class="mute">Chrome runs the extension from this folder, so <b>never delete, rename or move it</b>.</p></div></div>
     <div class="card step"><span class="num">4</span><h2>Turn on Developer mode</h2>
       <div><p>In Chrome, type <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">copy</button> in the address bar and press Enter. Turn on <b>Developer mode</b> (top right).</p></div></div>
     <div class="card step"><span class="num">5</span><h2>Load the extension</h2>
@@ -149,6 +157,11 @@ ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-we
     <div class="nav"><button class="btn next" data-go="help">Next: Help & updates →</button></div>
     </div>
     <div class="sec" data-s="help" hidden>
+    <div class="card warn">
+      <h2>⚠️ Never delete the extension folder</h2>
+      <p>The folder you unzip (<code>lms-guardian-main</code>) <b>is</b> the extension: Chrome runs it from there. <b>Never delete it, rename it, or move it</b>, not even after it's installed. If you do, the extension stops working and you have to install it again from the start.</p>
+      <p>It's fine to delete the downloaded <b>ZIP file</b> once you've unzipped it, but <b>keep the unzipped folder</b> forever. Put it somewhere safe like Documents, and when you clean up your Downloads folder, make sure it's not in there.</p>
+    </div>
     <div class="card">
       <h2>If something goes wrong</h2>
       <ul>
@@ -228,6 +241,11 @@ ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-we
     <div class="nav"><button class="btn next" data-go="install">التالي: التثبيت ←</button></div>
     </div>
     <div class="sec" data-s="install" hidden>
+    <div class="card warn">
+      <h2>⚠️ ما تمسحش فولدر الإضافة أبداً</h2>
+      <p>الفولدر اللي بتفك عليه الضغط (<code>lms-guardian-main</code>) <b>هو</b> الإضافة نفسها: Chrome بيشغّلها من هناك. <b>ما تمسحوش ولا تغيّر اسمه ولا تنقله أبداً</b>، حتى بعد ما تتثبّت. لو عملت كده الإضافة هتقف وهتضطر تثبّتها من الأول.</p>
+      <p>عادي تمسح ملف الـ <b>ZIP</b> اللي نزّلته بعد ما تفك الضغط، بس <b>سيب الفولدر اللي اتفك</b> على طول. حطه في مكان آمن زي Documents، ولما تنضّف فولدر Downloads اتأكد إنه مش جواه.</p>
+    </div>
     <div class="card">
       <h2>التثبيت: حوالي 5 دقايق</h2>
       <p class="mute"><b>محتاج:</b> متصفح Google Chrome على كمبيوتر (مش موبايل)، و<b>كود الإضافة</b> بتاعك: كود طويل من حروف وأرقام بيبعتهولك اللي ضافك. خليه معاك بس، لأنه بيفتح تحديثاتك.</p>
@@ -239,7 +257,7 @@ ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-we
       <p class="mute" style="margin-top:6px">هينزل ملف اسمه <code>lms-guardian-main.zip</code>.</p></div></div>
     <div class="card step"><span class="num">3</span><h2>فك الضغط في مكان ثابت</h2>
       <div><p>افتح فولدر <b>Downloads</b>، اضغط كليك يمين على ملف الـ ZIP واختار <b>Extract All…</b> (استخراج الكل)، غيّر المكان لفولدر <b>Documents</b> (المستندات) واضغط <b>Extract</b>. على الماك: دبل كليك على الملف واسحب الفولدر الجديد لـ Documents.</p>
-      <p class="mute">Chrome بيشغّل الإضافة من الفولدر ده، فما تمسحوش وما تنقلوش بعد كده.</p></div></div>
+      <p class="mute">Chrome بيشغّل الإضافة من الفولدر ده، فـ<b>ما تمسحوش ولا تغيّر اسمه ولا تنقله أبداً</b>.</p></div></div>
     <div class="card step"><span class="num">4</span><h2>شغّل وضع المطوّر</h2>
       <div><p>في Chrome اكتب <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">نسخ</button> في شريط العنوان واضغط Enter. شغّل زرار <b>Developer mode</b> (وضع مطوّر البرامج) فوق على الجنب.</p></div></div>
     <div class="card step"><span class="num">5</span><h2>حمّل الإضافة</h2>
@@ -270,6 +288,11 @@ ol.map{list-style:decimal}ol.map a{color:var(--acc);text-decoration:none;font-we
     <div class="nav"><button class="btn next" data-go="help">التالي: مساعدة وتحديث ←</button></div>
     </div>
     <div class="sec" data-s="help" hidden>
+    <div class="card warn">
+      <h2>⚠️ ما تمسحش فولدر الإضافة أبداً</h2>
+      <p>الفولدر اللي بتفك عليه الضغط (<code>lms-guardian-main</code>) <b>هو</b> الإضافة نفسها: Chrome بيشغّلها من هناك. <b>ما تمسحوش ولا تغيّر اسمه ولا تنقله أبداً</b>، حتى بعد ما تتثبّت. لو عملت كده الإضافة هتقف وهتضطر تثبّتها من الأول.</p>
+      <p>عادي تمسح ملف الـ <b>ZIP</b> اللي نزّلته بعد ما تفك الضغط، بس <b>سيب الفولدر اللي اتفك</b> على طول. حطه في مكان آمن زي Documents، ولما تنضّف فولدر Downloads اتأكد إنه مش جواه.</p>
+    </div>
     <div class="card">
       <h2>لو حصلت مشكلة</h2>
       <ul>

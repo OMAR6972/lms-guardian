@@ -1,4 +1,4 @@
-import { settings, readFeed, eventId, unseenSis, baseline } from "./lib.js";
+import { settings, readFeed, eventId, unseenSis, baseline, newAdvisor } from "./lib.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -60,16 +60,25 @@ function sisStatus(sis) {
   const when = ago(sis.fullAt), btn = ' <button class="link" id="sisNow">Check now</button>';
   if (sis.status === "logged_out")
     return `<div class="card mute">🎓 You're logged out of the SIS, so checks are paused. Showing what was read ${esc(when)}. Log in to the SIS and they resume by themselves.</div>`;
+  if (sis.status === "fees")
+    return `<div class="card mute">🎓 The SIS is hiding your grades: it says you can't use the grade pages until the tuition fees are paid, so nothing new can be read. Showing what was read before. Checks keep running and resume by themselves once the SIS lets you in again.<br>${btn}</div>`;
   if (sis.status === "error")
     return `<div class="card mute">🎓 The last SIS read failed (${esc(sis.error || "no answer")}). Showing what was read ${esc(when)}.${btn}</div>`;
   return `<div class="row between mute" style="margin-bottom:6px"><span>🎓 SIS marks · read ${esc(when)}</span>${btn}</div>`;
 }
 
 async function renderGrades(list) {
-  const { sis, sisSeen = {}, sisLog = [] } = await chrome.storage.local.get(["sis", "sisSeen", "sisLog"]);
+  const { sis, sisSeen = {}, sisLog = [], advSeen } = await chrome.storage.local.get(["sis", "sisSeen", "sisLog", "advSeen"]);
   if (S.tab !== "grades") return;
   const unseen = new Set(unseenSis(sis, sisSeen));
   let html = sisStatus(sis);
+  const adv = sis && sis.advisor, advNew = new Set(newAdvisor(adv, advSeen).map((x) => x.key));
+  if (adv && (adv.messages || []).length) {
+    const last = adv.messages.slice(0, 3);
+    html += '<div class="card"><b>💬 Your advisor</b>' + (adv.badge ? ` <span class="mute">· ${adv.badge} unread on the SIS</span>` : "") +
+      last.map((x) => `<div style="margin-top:6px${advNew.has(x.key) ? ";background:#fff1bf;color:#10243a;border-radius:6px;padding:4px" : ""}"><span class="mute">${x.mine ? "You" : esc(x.who)} · ${esc(x.when)}</span><br>${esc(x.text)}</div>`).join("") +
+      '<div style="margin-top:6px"><a href="https://eng.asu.edu.eg/study/studies/discuss" target="_blank">Open the conversation</a></div></div>';
+  }
   const courses = (sis && sis.courses) || {};
   const codes = Object.keys(courses).sort();
   if (codes.length) {
@@ -113,6 +122,10 @@ async function renderGrades(list) {
   list.innerHTML = html;
   const nb = document.getElementById("sisNow");
   if (nb) nb.onclick = async () => { nb.textContent = "Checking…"; nb.disabled = true; await chrome.runtime.sendMessage({ type: "sisCheckNow" }); if (S.tab === "grades") render(); };
+  if (advNew.size) { // you've now seen the advisor's messages
+    await chrome.storage.local.set({ advSeen: (adv.messages || []).map((x) => x.key) });
+    chrome.runtime.sendMessage({ type: "refresh" });
+  }
   if (sis && unseen.size) { // you've now seen them: clear the badge (they stay highlighted until you leave this tab)
     await chrome.storage.local.set({ sisSeen: { ...sisSeen, ...baseline(sis) } });
     chrome.runtime.sendMessage({ type: "refresh" });

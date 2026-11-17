@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LMS Guardian",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Your LMS Guardian updates from Moodle and your SIS marks: what's new, deadlines, marks table.",
   "permissions": [
     "storage",
@@ -51,7 +51,8 @@
         "dashboard.html"
       ],
       "matches": [
-        "https://lms.eng.asu.edu.eg/*"
+        "https://lms.eng.asu.edu.eg/*",
+        "https://eng.asu.edu.eg/*"
       ]
     }
   ],

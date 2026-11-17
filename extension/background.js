@@ -3,7 +3,7 @@
 // 2 minutes keeps an idle session alive; a full read of your subjects and final grades runs every 10 minutes,
 // and right away when you open any SIS page. Nothing is read from the SIS except marks and grades.
 import { settings, readFeed, readEnc, writeEnc, REPO, eventId, SIS, looksLoggedOut, profileUrl, parseMyCourses, parseMarks, parseFinals,
-  unseenSis, baseline, changes, sisPages } from "./lib.js";
+  unseenSis, baseline, changes, sisPages, blockedByFees, parseAdvisorBadge, parseAdvisorThread, newAdvisor } from "./lib.js";
 
 const PING_MINUTES = 2;
 const FULL_EVERY_MS = 10 * 60e3;
@@ -36,8 +36,10 @@ async function refreshBadge(cfg) {
       await chrome.storage.local.set({ unread: n });
     } catch (e) { const v = await chrome.storage.local.get("unread"); n = v.unread || 0; }
   }
-  const { sis, sisSeen = {} } = await chrome.storage.local.get(["sis", "sisSeen"]);
-  const total = n + unseenSis(sis, sisSeen).length;
+  const { sis, sisSeen = {}, advSeen } = await chrome.storage.local.get(["sis", "sisSeen", "advSeen"]);
+  const sisNew = unseenSis(sis, sisSeen).length + newAdvisor(sis && sis.advisor, advSeen).length;
+  await chrome.storage.local.set({ sisUnseen: sisNew });
+  const total = n + sisNew;
   chrome.action.setBadgeBackgroundColor({ color: "#2f80d6" });
   chrome.action.setBadgeText({ text: total ? String(Math.min(total, 99)) : "" });
 }
@@ -48,6 +50,7 @@ async function get(path) {
   const r = await fetch(path.startsWith("http") ? path : SIS + path, { credentials: "include", cache: "no-store", redirect: "follow" });
   const html = await r.text();
   if (looksLoggedOut(r.url || path, html)) { const e = new Error("logged out"); e.loggedOut = true; throw e; }
+  if (!/payments\/student_fees/.test(path) && blockedByFees(r.url || path, html)) { const e = new Error("fees"); e.fees = true; throw e; }
   if (!r.ok) throw new Error(`SIS answered ${r.status}`);
   return html;
 }
@@ -63,7 +66,11 @@ async function sisTick(force) {
 }
 
 async function sisPing() {
-  try { await get("/dashboard"); await patch({ status: "ok", pingAt: Date.now() }); }
+  try {
+    await get("/dashboard");
+    const { sis } = await chrome.storage.local.get("sis");
+    await patch({ status: sis && sis.status === "fees" ? "fees" : "ok", pingAt: Date.now() });
+  }
   catch (e) { await patch({ status: e.loggedOut ? "logged_out" : "error", error: e.loggedOut ? "" : e.message, pingAt: Date.now() }); }
 }
 
@@ -80,30 +87,45 @@ function sisFull() {
   return running;
 }
 async function sisFullInner() {
-  const { sis: old = { status: "never" }, sisSeen, sisLog = [] } = await chrome.storage.local.get(["sis", "sisSeen", "sisLog"]);
+  const { sis: old = { status: "never" }, sisSeen, sisLog = [], advSeen } = await chrome.storage.local.get(["sis", "sisSeen", "sisLog", "advSeen"]);
   try {
     const dash = await get("/dashboard");
     const profile = profileUrl(dash) || old.profile || "";
-    const list = parseMyCourses(await get("/dashboard/my_courses"));
-    const courses = {};
-    for (const c of list) {
-      const marks = parseMarks(await get(c.url));
-      courses[c.code] = { name: c.name, term: c.term, url: c.url, marks };
+    const ownId = (/\/users\/(\d+)\/profile/.exec(profile) || [])[1] || "";
+    // Advisor chat: its own try, so a problem here never stops marks, and a fees block never stops this.
+    let advisor = old.advisor;
+    try {
+      const thread = parseAdvisorThread(await get("/study/studies/discuss"), ownId);
+      advisor = { badge: parseAdvisorBadge(dash), messages: thread.slice(0, 40), at: Date.now() };
+      if (!advSeen) await chrome.storage.local.set({ advSeen: thread.map((x) => x.key) }); // first read: nothing is new
+    } catch (e) { if (e.loggedOut) throw e; if (advisor) advisor = { ...advisor, badge: parseAdvisorBadge(dash) }; }
+    let sis;
+    try {
+      const list = parseMyCourses(await get("/dashboard/my_courses"));
+      const courses = {};
+      for (const c of list) {
+        const marks = parseMarks(await get(c.url));
+        courses[c.code] = { name: c.name, term: c.term, url: c.url, marks };
+      }
+      let finals = old.finals || {};
+      if (profile) {
+        const f = parseFinals(await get(profile));
+        if (Object.keys(f).length || !Object.keys(finals).length) finals = f; // an empty read never wipes known grades
+      }
+      if (!list.length && old.courses && Object.keys(old.courses).length) throw new Error("subject list read empty");
+      sis = { status: "ok", error: "", fullAt: Date.now(), pingAt: Date.now(), profile, courses, finals, advisor };
+    } catch (e) {
+      if (!e.fees) throw e;
+      // Unpaid fees: the faculty hides all grade pages. Keep everything read before and say why nothing new can be read.
+      sis = { ...old, status: "fees", error: "", fullAt: Date.now(), pingAt: Date.now(), profile, advisor };
     }
-    let finals = old.finals || {};
-    if (profile) {
-      const f = parseFinals(await get(profile));
-      if (Object.keys(f).length || !Object.keys(finals).length) finals = f; // an empty read never wipes known grades
-    }
-    if (!list.length && old.courses && Object.keys(old.courses).length) throw new Error("subject list read empty");
-    const sis = { status: "ok", error: "", fullAt: Date.now(), pingAt: Date.now(), profile, courses, finals };
     // what changed since the last read (kept for the Grades tab)
-    const log = sisLog.concat(changes(old, sis)).slice(-LOG_MAX);
+    const log = sisLog.concat(sis.status === "ok" ? changes(old, sis) : []).slice(-LOG_MAX);
     const save = { sis, sisLog: log };
     if (!sisSeen) save.sisSeen = baseline(sis); // first read ever: nothing counts as new
     await chrome.storage.local.set(save);
     const cfg = await settings();
-    if (cfg.token && cfg.pass) await pushSis(cfg, sis).catch((e) => console.warn("sis push:", e.message));
+    if (sis.status === "ok" && cfg.token && cfg.pass) await pushSis(cfg, sis).catch((e) => console.warn("sis push:", e.message));
     await refreshBadge(cfg);
     return sis;
   } catch (e) {

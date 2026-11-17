@@ -82,6 +82,36 @@ export function looksLoggedOut(url, html) {
   try { if (/^\/(ar\/)?login\b/i.test(new URL(url).pathname)) return true; } catch (e) { /* not a URL */ }
   return /type=["']?password/i.test(html || "") && /captcha/i.test(html || "");
 }
+/** The SIS refuses grade pages (subjects, profile) while tuition is unpaid and sends you to the fees page instead. */
+export function blockedByFees(url, html) {
+  try { if (/^\/payments\/student_fees\b/i.test(new URL(url, SIS).pathname)) return true; } catch (e) { /* not a URL */ }
+  return /cannot use this service, unless you pay the tuition fees/i.test(html || "");
+}
+/** Unread count on the dashboard's "Discuss with your advisor" button. */
+export function parseAdvisorBadge(html) {
+  const m = /title="Discuss with your advisor"[\s\S]*?<span class="badge[^"]*"[^>]*>\s*(\d+)\s*<\/span>/.exec(html || "");
+  return m ? Number(m[1]) : 0;
+}
+/** The advisor discussion thread -> [{key, mine, who, when, text}], newest first as the page lists them.
+ *  key ignores the relative date ("18 days ago" changes daily); mine = written by you (own = your user id). */
+export function parseAdvisorThread(html, ownId) {
+  const out = [];
+  const re = /<div class="media-body">\s*<h5[^>]*>\s*<a[^>]*href="[^"]*\/users\/(\d+)\/profile"[^>]*>([\s\S]*?)<\/a>\s*<span class="date"[^>]*>([\s\S]*?)<\/span>\s*<\/h5>\s*<p[^>]*>([\s\S]*?)<\/p>/g;
+  const seen = {};
+  for (let m; (m = re.exec(html || ""));) {
+    const who = clean(m[2]), text = clean(m[4].replace(/<br\s*\/?>/gi, " "));
+    const base = `${m[1]}|${text.slice(0, 160)}`;
+    seen[base] = (seen[base] || 0) + 1;
+    out.push({ key: `${base}|${seen[base]}`, mine: String(m[1]) === String(ownId), who, when: clean(m[3]), text: text.slice(0, 300) });
+  }
+  return out;
+}
+/** Advisor messages you haven't seen yet. First read ever (seen === undefined) counts nothing as new. */
+export function newAdvisor(adv, seen) {
+  if (!adv || !seen) return [];
+  const have = new Set(seen);
+  return (adv.messages || []).filter((x) => !x.mine && !have.has(x.key));
+}
 /** Profile link from any signed-in page: /users/<id>/profile */
 export function profileUrl(html) {
   const m = /href="(?:https:\/\/eng\.asu\.edu\.eg)?(\/users\/\d+\/profile)"/.exec(html || "");

@@ -202,3 +202,30 @@ $("setup").onsubmit = async (e) => {
   chrome.runtime.sendMessage({ type: "refresh" });
 };
 boot();
+
+
+// ---------- optional: connect my own Moodle account (gets a personal read-only token, shows /connect TOKEN) ----------
+const MOODLE = "https://lms.eng.asu.edu.eg";
+$("mConnect").onclick = () => { $("moodleForm").hidden = !$("moodleForm").hidden; $("mOut").hidden = true; $("mErr").textContent = ""; };
+$("moodleForm").onsubmit = async (e) => {
+  e.preventDefault();
+  $("mErr").textContent = ""; $("mOut").hidden = true;
+  const user = $("mEmail").value.trim(), pass = $("mPass").value;
+  if (!user || !pass) { $("mErr").textContent = "Enter your Moodle email and password."; return; }
+  try {
+    const r = await fetch(`${MOODLE}/login/token.php`, { method: "POST", credentials: "omit", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ username: user, password: pass, service: "moodle_mobile_app" }) });
+    const d = await r.json();
+    if (!d.token) throw new Error(d.error || "Moodle did not give a token. Check your email and password.");
+    $("mCmd").value = `/connect ${d.token}`;
+    $("mOut").hidden = false;
+    let bot = "omar_lms_guardian_bot";
+    $("mBot").href = `https://t.me/${bot}`; $("mBot").textContent = `Open @${bot}`;
+  } catch (err) { $("mErr").textContent = err.message; }
+  $("mPass").value = ""; // the password is never kept
+};
+$("mCopy").onclick = async () => {
+  try { await navigator.clipboard.writeText($("mCmd").value); $("mCopy").textContent = "Copied ✓"; }
+  catch (e) { $("mCmd").select(); $("mCopy").textContent = "Select and copy"; }
+  setTimeout(() => { $("mCopy").textContent = "Copy"; }, 2000);
+};

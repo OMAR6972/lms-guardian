@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LMS Guardian",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Your LMS Guardian updates from Moodle and your SIS marks: what's new, deadlines, marks table.",
   "permissions": [
     "storage",
@@ -10,7 +10,8 @@
   "host_permissions": [
     "https://raw.githubusercontent.com/*",
     "https://api.github.com/*",
-    "https://eng.asu.edu.eg/*"
+    "https://eng.asu.edu.eg/*",
+    "https://lms.eng.asu.edu.eg/*"
   ],
   "background": {
     "service_worker": "background.js",

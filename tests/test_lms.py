@@ -24,6 +24,7 @@ class FakeTelegram:
         self.chat_id = OWNER_CHAT
         self.sent, self.queue, self.fail_for, self.docs = [], [], set(), []
         self.markups, self.edits, self.answers, self.commands = [], [], [], None
+        self.deleted = []
 
     def send(self, text, markup=None, chat_id=None):
         chat = str(chat_id or self.chat_id)
@@ -42,6 +43,9 @@ class FakeTelegram:
 
     def set_commands(self, commands):
         self.commands = commands
+
+    def delete(self, chat_id, message_id):
+        self.deleted.append((str(chat_id), message_id))
 
     def send_document(self, filename, data, caption="", chat_id=None):
         chat = str(chat_id or self.chat_id)
@@ -139,8 +143,8 @@ class FakeMoodle:
         raise AssertionError(fn)
 
 
-def run(tmp_path, m, tg, now=NOW, dc=None):
-    e = Engine(m, tg, root=str(tmp_path), key=KEY, now=now, log=lambda *_: None, dc=dc or FakeDiscord())
+def run(tmp_path, m, tg, now=NOW, dc=None, mk=None):
+    e = Engine(m, tg, root=str(tmp_path), key=KEY, now=now, log=lambda *_: None, dc=dc or FakeDiscord(), mk_moodle=mk)
     try:
         e.run()
     finally:
@@ -793,3 +797,100 @@ def test_picker_ignores_strangers_and_subjects_not_offered(tmp_path):
     assert tg.texts(999) == ""
     assert [p for p in cfg(tmp_path)["people"] if p["id"] == "f1"][0]["courses"] == []
     assert "Saved" not in tg.texts(777)
+
+
+FRIEND_TOKEN = "FRIENDTOKEN123"
+
+
+def friend_moodle():
+    """A friend's own Moodle account: subject 3 (which the owner does not have) and subject 1 (shared)."""
+    f = FakeMoodle()
+    f.valid = FRIEND_TOKEN
+    f.userid = 99
+    f.courses = [
+        {"id": 3, "fullname": "CSE491s (UG2023) - Graduation Project (40990)", "lastaccess": NOW - 86400},
+        {"id": 1, "fullname": "CSE333s (UG2023) - Data Structures and Algorithms (40954)", "lastaccess": NOW - 2 * 86400},
+        {"id": 9, "fullname": "OLD101 (UG2020) - Ancient Subject (1)", "lastaccess": NOW - 900 * 86400},
+    ]
+    f.contents[3] = [{"name": "General", "modules": [
+        {"id": 31, "modname": "resource", "name": "GP Guidelines", "url": "https://lms.test/mod/resource/view.php?id=31",
+         "description": "", "contents": []}]}]
+    f.contents[9] = []
+    f.assigns[3], f.assigns[9], f.discs[3], f.discs[9] = [], [], [], []
+    return f
+
+
+def test_friend_connects_own_moodle_account(tmp_path):
+    m, tg, fm = FakeMoodle(), FakeTelegram(), friend_moodle()
+    def mk(t):   # the client for a token; any token but the friend's is rejected by the fake server
+        c = fm if t == FRIEND_TOKEN else FakeMoodle()
+        c.token = t
+        return c
+    run(tmp_path, m, tg, mk=mk)
+    c = cfg(tmp_path)
+    c["people"][0]["courses"] = [1]
+    c["people"].append(friend([1]))
+    set_cfg(tmp_path, c)
+    tg.queue = [{"update_id": 1, "message": {"chat": {"id": 777}, "text": "/start abc123"}}]
+    run(tmp_path, m, tg, mk=mk)
+    # a wrong token: deleted from the chat, refused, nothing saved
+    tg.queue.append({"update_id": 2, "message": {"chat": {"id": 777}, "message_id": 31, "text": "/connect BADTOKEN"}})
+    tg.sent.clear()
+    run(tmp_path, m, tg, mk=mk)
+    assert ("777", 31) in tg.deleted and "didn't work" in tg.texts(777)
+    assert state(tmp_path)["accts"] == {}
+    # the real token
+    tg.queue.append({"update_id": 3, "message": {"chat": {"id": 777}, "message_id": 32, "text": f"/connect {FRIEND_TOKEN}"}})
+    tg.sent.clear()
+    run(tmp_path, m, tg, mk=mk)
+    assert ("777", 32) in tg.deleted and "own Moodle account is connected" in tg.texts(777)
+    assert "connected their own Moodle account" in tg.texts(OWNER_CHAT)
+    assert FRIEND_TOKEN not in tg.texts() and FRIEND_TOKEN not in json.dumps(tg.docs, default=str)
+    assert sorted(cfg(tmp_path)["people"][1]["courses"]) == [1, 3]   # the recently opened ones, not the 900-day-old one
+    assert FRIEND_TOKEN in json.dumps(state(tmp_path)["accts"])       # kept, but only inside the encrypted file
+    assert "Now following" in tg.texts(777) and "CSE491s — Graduation Project" in tg.texts(777)
+    # picker offers their own subjects (3 is not in the owner's account)
+    tg.queue.append({"update_id": 4, "message": {"chat": {"id": 777}, "text": "/subjects"}})
+    tg.markups.clear()
+    run(tmp_path, m, tg, mk=mk)
+    offered = " ".join(b[0]["text"] for chat, mk_ in tg.markups if chat == "777" for b in mk_["inline_keyboard"])
+    assert "CSE491s" in offered and "OLD101" not in offered
+    # changes come from THEIR account and only to them; the owner's crawl never sends them anything
+    tg.sent.clear()
+    fm.contents[3][0]["modules"][0]["name"] = "GP Guidelines v2"
+    m.assigns[1][0]["duedate"] += 3600
+    run(tmp_path, m, tg, mk=mk)
+    assert "GP Guidelines v2" in tg.texts(777) and "GP Guidelines" not in tg.texts(OWNER_CHAT)
+    assert "Assignment changed" in tg.texts(OWNER_CHAT) and "Assignment" not in tg.texts(777)  # course 1 via the owner's account is not theirs
+    fm.assigns[1] = [{"id": 5, "cmid": 12, "name": "Assignment 1", "duedate": ts(2026, 11, 22, 23, 59), "allowsubmissionsfromdate": 0, "cutoffdate": 0, "intro": "x"}]
+    tg.sent.clear()
+    run(tmp_path, m, tg, mk=mk)
+    assert tg.texts(777).count("Assignment changed") == 1       # exactly once, from their own account
+    # a revoked token is reported once, then left alone
+    fm.valid = "something-else"
+    tg.sent.clear()
+    run(tmp_path, m, tg, mk=mk)
+    run(tmp_path, m, tg, mk=mk)
+    assert tg.texts(777).count("connection stopped working") == 1
+    # /disconnect forgets the token
+    tg.queue.append({"update_id": 5, "message": {"chat": {"id": 777}, "text": "/disconnect"}})
+    run(tmp_path, m, tg, mk=mk)
+    assert state(tmp_path)["accts"] == {}
+    assert cfg(tmp_path)["people"][1]["courses"] == [1]          # only what the owner's account can serve
+
+
+def test_connect_is_for_known_people_only(tmp_path):
+    m, tg = FakeMoodle(), FakeTelegram()
+    def mk(t):
+        c = friend_moodle()
+        c.token = t
+        return c
+    run(tmp_path, m, tg, mk=mk)
+    tg.queue = [{"update_id": 1, "message": {"chat": {"id": 999}, "message_id": 5, "text": f"/connect {FRIEND_TOKEN}"}}]
+    run(tmp_path, m, tg, mk=mk)
+    assert state(tmp_path)["accts"] == {}
+    # the owner cannot connect an account either (the bot already uses their login)
+    tg.queue.append({"update_id": 2, "message": {"chat": {"id": 42}, "message_id": 6, "text": f"/connect {FRIEND_TOKEN}"}})
+    tg.sent.clear()
+    run(tmp_path, m, tg, mk=mk)
+    assert state(tmp_path)["accts"] == {} and "already reads Moodle" in tg.texts(OWNER_CHAT)

@@ -47,7 +47,7 @@ body.tab .filters{grid-template-columns:repeat(4,1fr)}
 <body>
 <div class="row between">
   <h1>LMS Guardian <span class="mute" id="who"></span></h1>
-  <span class="row"><span class="mute" id="count"></span><button class="link" id="markAll" hidden>Mark all read</button><button class="link" id="openTab" title="Open in a full tab">⤢ Open in tab</button><button class="link" id="gear" title="Change code">⚙</button></span>
+  <span class="row"><span class="mute" id="count"></span><button class="link" id="markAll" hidden>Mark all read</button><button class="link" id="openTab" title="Open in a full tab">⤢ Open in tab</button><button class="link" id="mConnect" title="Connect my own Moodle (optional)">🔗 My Moodle</button><button class="link" id="gear" title="Change code">⚙</button></span>
 </div>
 
 <form id="setup" class="card" hidden>
@@ -60,6 +60,17 @@ body.tab .filters{grid-template-columns:repeat(4,1fr)}
     <p class="mute" id="keysState"></p>
   </details>
   <div class="row"><button class="primary" type="submit">Save</button><span class="err" id="serr"></span></div>
+</form>
+<form id="moodleForm" class="card" hidden>
+  <p><b>Connect my own Moodle</b> <span class="mute">(optional)</span></p>
+  <p class="mute">The bot follows its owner's subjects by default. If your subjects are different, get your personal Moodle token here and send it to the bot as <code>/connect TOKEN</code>. Your Moodle email and password are used once, right here in your browser, to ask Moodle for the token. They are never saved or sent anywhere else. The token only lets the bot <b>read</b> your subjects, and you can remove it any time with <code>/disconnect</code>.</p>
+  <label>Moodle email<input id="mEmail" type="text" autocomplete="off" spellcheck="false"></label>
+  <label>Moodle password<input id="mPass" type="password" autocomplete="off"></label>
+  <div class="row"><button class="primary" type="submit">Get my token</button><span class="err" id="mErr"></span></div>
+  <div id="mOut" hidden>
+    <label>Send this to the bot in Telegram<input id="mCmd" type="text" readonly></label>
+    <div class="row"><button type="button" id="mCopy">Copy</button><a id="mBot" target="_blank" rel="noopener">Open the bot</a></div>
+  </div>
 </form>
 
 <div id="app" hidden>

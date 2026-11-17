@@ -74,5 +74,8 @@ class Telegram:
             "editMessageReplyMarkup", chat_id=chat_id or self.chat_id, message_id=message_id, reply_markup=markup
         )
 
+    def delete(self, chat_id, message_id):
+        return self._api("deleteMessage", chat_id=chat_id, message_id=message_id)
+
     def set_commands(self, commands):
         return self._api("setMyCommands", commands=[{"command": c, "description": d} for c, d in commands])

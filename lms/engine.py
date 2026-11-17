@@ -11,7 +11,7 @@ import time
 
 from . import diff, snapshot, vault
 from .discord import Discord, DiscordError, valid_webhook
-from .moodle import LoginError, MoodleError
+from .moodle import LoginError, Moodle, MoodleError
 from .telegram import TgError
 from .util import NetError, TooBig, chunk_blocks, esc, fmt_delta, fmt_size, fmt_ts, html_to_md, split_course
 
@@ -19,6 +19,7 @@ HISTORY_MAX = 600
 OWNER_ONLY = ("grades", "sis")  # personal: never sent to friends or Discord channels
 SIS_STALE_HOURS = 12
 RECENT_DAYS = 60  # first run only: pre-select subjects opened within this many days
+PICK_DAYS = 150   # a friend's own account: subjects opened within this many days are offered in /subjects
 FEED_HISTORY = 300  # newest events kept in each person's extension feed
 TG_FILE_MAX = 50 * 1024 * 1024       # Telegram bots can upload up to 50 MB
 DC_FILE_MAX = 10 * 1024 * 1024 - 65536  # Discord webhooks without server boosts: 10 MB
@@ -29,7 +30,7 @@ def feed_id(code):
     """File name of a person's extension feed. Derived from their code, so it reveals nothing about them."""
     return hashlib.sha256(("lms-guardian-feed:" + code).encode("utf-8")).hexdigest()[:24]
 
-COMMANDS = [("subjects", "Choose which subjects you follow"), ("courses", "Your subjects"),
+COMMANDS = [("subjects", "Choose which subjects you follow"), ("connect", "Use your own Moodle account"), ("courses", "Your subjects"),
             ("upcoming", "Deadlines coming up"), ("history", "Latest changes"), ("status", "What I'm watching")]
 PICK_NOTE = ("⏳ <b>Changes aren't instant.</b> I apply taps at my next check, about every 2 minutes. "
              "Tap every subject you want to switch once, then wait: I'll reply <b>once</b> with all your changes.\n"
@@ -38,6 +39,8 @@ PICK_NOTE = ("⏳ <b>Changes aren't instant.</b> I apply taps at my next check, 
 HELP = (
     "<b>LMS Guardian</b>\n\n"
     "/subjects – choose which subjects you follow\n"
+    "/connect – use your own Moodle account (if your subjects differ)\n"
+    "/disconnect – go back to the shared subject list\n"
     "/courses – your subjects\n"
     "/upcoming – deadlines and quizzes coming up\n"
     "/history – latest detected changes\n"
@@ -57,8 +60,10 @@ def render_event(e):
 
 
 class Engine:
-    def __init__(self, moodle, tg, root=".", key="", now=None, log=print, dc=None, selftest=""):
+    def __init__(self, moodle, tg, root=".", key="", now=None, log=print, dc=None, selftest="", mk_moodle=None):
         self.m, self.tg, self.log, self.key = moodle, tg, log, key
+        self._mk = mk_moodle
+        self._cur = None  # the Moodle client of the friend being processed (their own token), else the owner's
         self.selftest = selftest
         self._dl = {}  # file url -> bytes or the exception, so each file is downloaded once per run
         self.dc = dc or Discord()
@@ -69,7 +74,7 @@ class Engine:
         self.cfg, self._cfg_prev = vault.load(self.cfg_path, key, None)
         self.st, self._st_prev = vault.load(self.st_path, key, {})
         for k, v in (("courses", {}), ("course_info", {}), ("history", []), ("offset", 0),
-                     ("chats", {}), ("sub", {}), ("token", ""), ("bot", ""), ("fail_streak", 0)):
+                     ("chats", {}), ("sub", {}), ("token", ""), ("bot", ""), ("fail_streak", 0), ("accts", {})):
             self.st.setdefault(k, v)
         self.now = now if now is not None else int(time.time())
         self.logged_in = False
@@ -104,10 +109,82 @@ class Engine:
         return (p.get("watch") or {}).get(cat, True)
 
     def tracked(self):
+        """Subjects read with the OWNER's Moodle login. People who connected their own account are read with their own."""
         out = set()
         for p in self.active_people():
-            out |= self.mine(p)
+            if not self.acct(p):
+                out |= self.mine(p)
         return out
+
+    # ---------- people who connected their own Moodle account (/connect) ----------
+    def acct(self, p):
+        return self.st["accts"].get(p["id"]) if p else None
+
+    def store(self, p):
+        """Where this person's subject snapshots live."""
+        a = self.acct(p)
+        return a["courses"] if a else self.st["courses"]
+
+    def new_client(self, token):
+        if self._mk:
+            return self._mk(token)
+        c = Moodle(self.m.base, "", "", post=self.m._post)
+        c.token = token
+        return c
+
+    def refresh_acct(self, p, a, m, courses=None):
+        """Read the subjects this person's own account is enrolled in. Raises LoginError if the token is dead."""
+        courses = courses if courses is not None else m.enrolled()
+        a["userid"] = m.userid
+        info, pick, recent = {}, [], []
+        for c in courses:
+            code, name = split_course(c.get("fullname", ""))
+            info[str(c["id"])] = {"code": code, "name": name}
+            la = c.get("lastaccess", 0)
+            if la and self.now - la < PICK_DAYS * 86400:
+                pick.append(c["id"])
+            if la and self.now - la < RECENT_DAYS * 86400:
+                recent.append(c["id"])
+        a["info"] = {k: v for k, v in info.items()}
+        a["pick"] = sorted(pick)
+        a["recent"] = sorted(recent)
+        for k, v in info.items():
+            self.st["course_info"].setdefault(k, v)  # so every message can name the subject
+        return recent
+
+    def connect_account(self, p, chat, msg_id, token):
+        try:  # the token is a key to their account: remove it from the chat first, whatever happens next
+            self.tg.delete(chat, msg_id)
+        except (TgError, AttributeError):
+            pass
+        if p.get("owner"):
+            return self.reply(chat, "You're the owner: the bot already reads Moodle with your own login.")
+        m = self.new_client(token)
+        a = {"token": token, "userid": None, "courses": {}, "info": {}, "pick": [], "recent": []}
+        try:
+            recent = self.refresh_acct(p, a, m)
+        except (LoginError, MoodleError, NetError):
+            return self.reply(chat, "❌ That token didn't work, so nothing was saved. Get a fresh one from the extension and send <code>/connect TOKEN</code> again.")
+        self.st["accts"][p["id"]] = a
+        p["courses"] = sorted(recent)  # start with the subjects you opened recently; change them with /subjects
+        self.st["sub"][p["id"]] = []   # so the next run tells them what they now follow
+        self.reply(chat, "✅ <b>Your own Moodle account is connected.</b>\n"
+                   f"I deleted your message with the token. You follow {len(recent)} subject{'s' if len(recent) != 1 else ''} you opened recently, "
+                   "read from <b>your</b> Moodle from now on. I'll tell you within about 2 minutes, then use /subjects to change them.")
+        owner = self.owner()
+        if owner and owner["id"] != p["id"]:
+            self.say_to(owner["id"], f"👤 <b>{esc(p['name'])}</b> connected their own Moodle account.")
+
+    def disconnect_account(self, p, chat):
+        if not self.acct(p):
+            return self.reply(chat, "You haven't connected your own account.")
+        del self.st["accts"][p["id"]]
+        owner = self.owner()
+        shared = {int(c) for c in self.st.get("owner_enrolled", [])} if owner else set()
+        p["courses"] = sorted(c for c in self.mine(p) if c in shared)  # the shared list can only serve what the owner has
+        self.reply(chat, "Disconnected. I deleted your Moodle token. You're back on the shared subject list "
+                   f"({len(p['courses'])} subject{'s' if len(p['courses']) != 1 else ''} in common). "
+                   "To make Moodle forget the token too, see Profile → Preferences → Security keys.")
 
     @staticmethod
     def is_discord(p):
@@ -199,8 +276,11 @@ class Engine:
 
     def pickable(self, p):
         """Owner: every subject Moodle lists. Others: the subjects the owner follows, plus their own."""
-        if p.get("owner"):
-            ids = {int(c) for c in self.st["course_info"]}
+        a = self.acct(p)
+        if a:
+            ids = {int(c) for c in a["pick"]} | (self.mine(p) & {int(c) for c in a["info"]})
+        elif p.get("owner"):
+            ids = {int(c) for c in self.st.get("owner_enrolled") or self.st["course_info"]}
         else:
             o = self.owner()
             ids = (self.mine(o) if o else set()) | self.mine(p)
@@ -297,6 +377,13 @@ class Engine:
             self.reply(chat, self.text_courses(p))
         elif cmd in ("/subjects", "/choose"):
             self.send_picker(p, chat)
+        elif cmd == "/connect":
+            if not args:
+                self.reply(chat, "To use your own Moodle account, open the LMS Guardian extension in Chrome → <b>Connect my Moodle</b>, then send me <code>/connect TOKEN</code> with the token it shows. I'll delete your message right away.")
+            else:
+                self.connect_account(p, chat, msg["message_id"], args[0])
+        elif cmd == "/disconnect":
+            self.disconnect_account(p, chat)
         elif cmd == "/status":
             self.reply(chat, self.text_status(p))
         elif cmd == "/upcoming":
@@ -325,7 +412,7 @@ class Engine:
     def text_upcoming(self, p):
         items = []
         for cid in self.mine(p):
-            snap = self.st["courses"].get(str(cid))
+            snap = self.store(p).get(str(cid))
             if not snap:
                 continue
             for a in snap["assigns"].values():
@@ -362,7 +449,9 @@ class Engine:
         self.refresh_courses()
 
     def refresh_courses(self):
-        for c in self.m.enrolled():
+        courses = self.m.enrolled()
+        self.st["owner_enrolled"] = sorted(c["id"] for c in courses)
+        for c in courses:
             code, name = split_course(c.get("fullname", ""))
             self.st["course_info"][str(c["id"])] = {"code": code, "name": name}
             if c.get("lastaccess", 0) and self.now - c["lastaccess"] < RECENT_DAYS * 86400:
@@ -405,6 +494,7 @@ class Engine:
             if self.selftest == "files":
                 self.selftest_files(os.environ.get("LMS_SELFTEST_CHANNEL", ""))
         if self.cfg is not None:
+            self.crawl_accts()
             try:
                 self.process_sis()
             except vault.VaultError:
@@ -436,10 +526,49 @@ class Engine:
             self.st["courses"][key] = new
         self.announce_subscriptions()
 
+    def crawl_accts(self):
+        """People who connected their own Moodle account: read THEIR subjects with THEIR token, tell only them."""
+        for p in self.active_people():
+            a = self.acct(p)
+            if not a or self.is_discord(p) or a.get("dead"):
+                continue
+            m = self.new_client(a["token"])
+            m.userid = a.get("userid")
+            try:
+                self.refresh_acct(p, a, m)
+            except LoginError:
+                a["dead"] = True  # revoked or expired: stop knocking; they connect again when they like
+                self.say_to(p["id"], "⚠️ <b>Your Moodle connection stopped working</b> (the token was revoked or expired). Send <code>/connect TOKEN</code> again to restart it.")
+                continue
+            except (MoodleError, NetError) as e:
+                self.log(f"account of {p['id']}: moodle unavailable ({type(e).__name__})")
+                continue
+            on = [c for c in sorted(self.mine(p)) if str(c) in a["info"]]
+            for key in list(a["courses"]):
+                if int(key) not in on:
+                    del a["courses"][key]
+            snaps, failed = snapshot.build(m, on, a["courses"], self.log, grades=False)
+            self.log(f"account {p['id']}: checked {len(snaps)}/{len(on)} subjects, {len(failed)} failed")
+            self._cur = m
+            try:
+                for cid, new in snaps.items():
+                    key = str(cid)
+                    old = a["courses"].get(key)
+                    if old is None:
+                        a["courses"][key] = new
+                        continue
+                    events = diff.diff_course(old, new)
+                    if events and not self.notify(cid, events, only=p):
+                        continue  # retry next run
+                    a["courses"][key] = new
+            finally:
+                self._cur = None
+        self.announce_subscriptions()
+
     def announce_subscriptions(self):
         """Tell each recipient about subjects that just became theirs (silent baseline) and remember them."""
         for p in self.active_people():
-            now_mine = {c for c in self.mine(p) if str(c) in self.st["courses"]}
+            now_mine = {c for c in self.mine(p) if str(c) in self.store(p)}
             seen = set(self.st["sub"].get(p["id"], []))
             new = sorted(now_mine - seen, key=lambda c: self.full(c))
             if new and self.connected(p):
@@ -450,13 +579,16 @@ class Engine:
             if self.connected(p) or not new:
                 self.st["sub"][p["id"]] = sorted(now_mine)
 
-    def notify(self, cid, events):
-        """Send each recipient only the kinds of events they switched on. True = safe to remember the change."""
+    def notify(self, cid, events, only=None):
+        """Send each recipient only the kinds of events they switched on. True = safe to remember the change.
+        `only` = a person with their own Moodle account: just them, from their own crawl."""
         header = f"<b>{esc(self.full(cid))}</b>"
-        if cid is None:
+        if only is not None:
+            recipients = [only] if cid in {int(c) for c in self.st["sub"].get(only["id"], [])} else []
+        elif cid is None:
             recipients = [p for p in self.active_people() if p.get("owner")]
         else:
-            recipients = [p for p in self.active_people() if cid in self.mine(p)
+            recipients = [p for p in self.active_people() if cid in self.mine(p) and not self.acct(p)
                           and cid in {int(c) for c in self.st["sub"].get(p["id"], [])}]
         owner_ok, any_fail = None, False
         for p in recipients:
@@ -481,7 +613,7 @@ class Engine:
     def fetch(self, f, limit):
         if f["url"] not in self._dl:
             try:
-                self._dl[f["url"]] = self.m.download(f["url"], TG_FILE_MAX)
+                self._dl[f["url"]] = (self._cur or self.m).download(f["url"], TG_FILE_MAX)
             except (TooBig, MoodleError, NetError, LoginError) as e:
                 self._dl[f["url"]] = e
                 self.log(f"file download failed: {type(e).__name__}: {e}"[:200])
@@ -612,7 +744,7 @@ class Engine:
             key = str(cid)
             if key in self.st["course_info"]:
                 info[key] = self.st["course_info"][key]
-            snap = self.st["courses"].get(key)
+            snap = self.store(p).get(key)
             if not snap:
                 continue
             c = {}

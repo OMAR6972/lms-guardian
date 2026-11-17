@@ -42,32 +42,86 @@ b{font-weight:700}
   <!-- ============ ENGLISH ============ -->
   <section id="en" lang="en" dir="ltr" class="card" style="background:none;border:0;padding:0">
     <div class="card">
-      <h2>Install the browser extension</h2>
-      <p>It shows your Moodle updates (new files, deadlines, changes) for the subjects you follow, plus a 🔔 on Moodle pages. About 5 minutes.</p>
-      <p class="mute"><b>You need:</b> Google Chrome on a computer (not a phone), and your <b>extension code</b>: a long code of letters and numbers that whoever added you to the bot sends you. Keep it to yourself; it opens your updates.</p>
+      <h2>What is LMS Guardian?</h2>
+      <p>Your faculty's Moodle (LMS) and the SIS don't tell you when something changes: you have to keep checking. LMS Guardian checks for you, every couple of minutes, and tells you. It has two parts that work together:</p>
+      <ul>
+        <li><b>The Telegram bot</b> (<code>@omar_lms_guardian_bot</code>). It watches Moodle for <b>the subjects you pick</b> and messages you when something happens.</li>
+        <li><b>The browser extension</b> (this page). A small dashboard in Chrome with everything in one place, and it also reads your <b>SIS marks</b>.</li>
+      </ul>
     </div>
 
-    <div class="card step"><span class="num">1</span><h2>Download</h2>
+    <div class="card">
+      <h2>What the bot does for you (Moodle / LMS)</h2>
+      <ul>
+        <li>📄 <b>New or updated files</b>: it sends you the actual file in Telegram (up to 50 MB), so you don't have to open Moodle.</li>
+        <li>🔄 <b>Changes and removals</b>: a lecture file replaced, renamed or deleted.</li>
+        <li>📝 <b>Assignments and quizzes</b>: new ones, and when a deadline or time changes.</li>
+        <li>💬 <b>Forum posts</b>, and ⏰ <b>deadlines coming up</b> (type <code>/upcoming</code>).</li>
+      </ul>
+      <p><b>You choose the subjects.</b> Send <code>/subjects</code> to the bot and tap the ✅/⬜ buttons. <b>Be patient:</b> the bot checks about every <b>2 minutes</b>, so it applies your taps at its next check and replies <b>once</b> with everything you changed. Tapping the same subject twice before it replies counts as one tap.</p>
+      <p class="mute">The bot only reads Moodle: it can't change anything there, and it never needs your Moodle password.</p>
+    </div>
+
+    <div class="card">
+      <h2>What the extension does for you</h2>
+      <ul>
+        <li><b>Since last visit / History / Deadlines</b>: every update in one place, searchable, with read/unread. On Moodle pages there's a 🔔 in the bottom-right corner with your unread count.</li>
+        <li><b>Grades tab (SIS)</b>: your subjects' marks (Midterm, Activities, Practical, Final) in one clean table, your past terms' final grades, and a "recent changes" list. When a mark is released or changed, it shows up highlighted and on the extension icon.</li>
+        <li><b>Your advisor</b>: the SIS never notifies you when your advisor replies. The extension watches the advisor conversation and shows you the new message.</li>
+        <li>On SIS pages there's a 🎓 button in the bottom-right corner that opens your marks. Nothing else on the SIS pages is changed.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>How the SIS part works (please read)</h2>
+      <p>Unlike Moodle, the SIS has a <b>CAPTCHA</b> at login, so nobody (not even the bot) can log in for you. That's why the SIS marks come from <b>your own Chrome</b>:</p>
+      <ol>
+        <li><b>You log in to the SIS yourself</b>, normally, in Chrome, and solve the CAPTCHA.</li>
+        <li>From then on the extension uses <b>your own signed-in session</b> to read your marks, about every 10 minutes while Chrome is open. It never asks for your SIS password and never stores it.</li>
+        <li>The SIS logs you out when you're idle. To prevent that, the extension makes a tiny harmless request <b>every 2 minutes</b> so the SIS sees you as active and keeps you logged in.</li>
+      </ol>
+      <p><b>Good to know:</b></p>
+      <ul>
+        <li>It only works while <b>Chrome is open on your computer</b>. If Chrome is closed or the computer sleeps, nothing is checked, and it catches up when you open Chrome again.</li>
+        <li>If you do get logged out (the SIS ended the session, or you logged out), checks <b>pause</b>. Log in again and they resume by themselves. The extension tells you when this happens.</li>
+        <li>It reads <b>only</b> your marks, final grades and advisor messages. It doesn't click or change anything, and your marks stay <b>in your own browser</b>.</li>
+        <li>If the faculty hides your grades (for example while tuition fees are unpaid), the extension tells you that, instead of showing empty tables.</li>
+        <li>Desktop Chrome only: there's no phone version.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Install it: about 5 minutes</h2>
+      <p class="mute"><b>You need:</b> Google Chrome on a computer (not a phone), and your <b>extension code</b>: a long code of letters and numbers that whoever added you sends you. Keep it to yourself; it opens your updates.</p>
+    </div>
+
+    <div class="card step"><span class="num">1</span><h2>Connect the bot (Telegram)</h2>
+      <div><p>Open the <b>invite link</b> you were sent, press <b>Start</b>, then send <code>/subjects</code> and choose your subjects. Wait about 2 minutes for the reply.</p></div></div>
+
+    <div class="card step"><span class="num">2</span><h2>Download</h2>
       <div><a class="btn" href="https://github.com/OMAR6972/lms-guardian/archive/refs/heads/main.zip">⬇ Download the extension (ZIP)</a>
       <p class="mute" style="margin-top:6px">You get a file called <code>lms-guardian-main.zip</code>.</p></div></div>
 
-    <div class="card step"><span class="num">2</span><h2>Unzip it somewhere permanent</h2>
+    <div class="card step"><span class="num">3</span><h2>Unzip it somewhere permanent</h2>
       <div><p>Open your <b>Downloads</b> folder, right-click the ZIP, choose <b>Extract All…</b>, change the place to your <b>Documents</b> folder and press <b>Extract</b>. On a Mac, double-click the ZIP and drag the new folder into Documents.</p>
       <p class="mute">Chrome runs the extension from this folder, so don't delete or move it later.</p></div></div>
 
-    <div class="card step"><span class="num">3</span><h2>Turn on Developer mode</h2>
+    <div class="card step"><span class="num">4</span><h2>Turn on Developer mode</h2>
       <div><p>In Chrome, type <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">copy</button> in the address bar and press Enter. Turn on <b>Developer mode</b> (top right).</p></div></div>
 
-    <div class="card step"><span class="num">4</span><h2>Load the extension</h2>
+    <div class="card step"><span class="num">5</span><h2>Load the extension</h2>
       <div><p>Press <b>Load unpacked</b> (top left). Go to <b>Documents → lms-guardian-main</b>, click the folder named <b><code>extension</code></b> once, and press <b>Select Folder</b>.</p>
       <p class="mute">A card called <b>LMS Guardian</b> with a blue bell appears.</p></div></div>
 
-    <div class="card step"><span class="num">5</span><h2>Pin it</h2>
+    <div class="card step"><span class="num">6</span><h2>Pin it</h2>
       <div><p>Press the puzzle-piece icon 🧩 next to the address bar, then the pin 📌 next to <b>LMS Guardian</b>.</p></div></div>
 
-    <div class="card step"><span class="num">6</span><h2>Enter your code</h2>
+    <div class="card step"><span class="num">7</span><h2>Enter your code</h2>
       <div><p>Click the blue bell on the toolbar, paste your extension code, and press <b>Save</b>.</p>
-      <p class="mute">You'll see your name at the top and your updates. On any Moodle page there's now a 🔔 in the bottom-right corner with your unread count. "Open in tab" shows it full-size.</p></div></div>
+      <p class="mute">You'll see your name at the top and your updates.</p></div></div>
+
+    <div class="card step"><span class="num">8</span><h2>Log in to the SIS (for marks)</h2>
+      <div><p>Open the SIS in Chrome and log in as usual. Within a minute, open the <b>Grades</b> tab in the extension: your marks appear there. Keep Chrome open and the extension keeps you logged in.</p></div></div>
 
     <div class="card">
       <h2>If something goes wrong</h2>
@@ -75,44 +129,100 @@ b{font-weight:700}
         <li><b>"Manifest file is missing"</b>: you picked the outer folder. Pick the <code>extension</code> folder inside it.</li>
         <li><b>"No updates for this code yet"</b>: your code was just made. Wait 2 minutes and press Save again.</li>
         <li><b>"This code doesn't open the feed"</b>: the code was copied wrong, or a new one was made. Ask for it again.</li>
+        <li><b>Grades tab says you're logged out of the SIS</b>: log in to the SIS again.</li>
       </ul>
     </div>
     <div class="card">
-      <h2>Updating later</h2>
-      <p>When you're told there's a new version: download the ZIP again, replace the old <code>lms-guardian-main</code> folder in Documents, then press the round ↻ arrow on the LMS Guardian card in <code>chrome://extensions</code>. You don't need to enter your code again.</p>
+      <h2>Updating later (safely)</h2>
+      <p>When you're told there's a new version: download the ZIP again and <b>copy the new files over the old ones, in the same folder</b> (choose "Replace"). Then press the round ↻ arrow on the LMS Guardian card in <code>chrome://extensions</code>.</p>
+      <p class="note"><b>Never press "Remove"</b> on the card: that erases your code and you'd have to enter it again. And if you see <b>two</b> LMS Guardian cards, you loaded a second copy from a different folder: remove the extra one and keep the one you set up first.</p>
     </div>
-    <p class="mute note">Privacy: the extension never asks for your Moodle password. It only reads a locked file that your own code opens, which holds the updates for your subjects and nothing else.</p>
+    <p class="mute note">Privacy: the extension never asks for your Moodle or SIS password. Your Moodle updates come from a locked file that only your own code opens (your subjects and nothing else). Your SIS marks are read by your own Chrome and stay in it.</p>
   </section>
 
   <!-- ============ ARABIC ============ -->
   <section id="ar" lang="ar" dir="rtl" class="card" style="background:none;border:0;padding:0" hidden>
     <div class="card">
-      <h2>تثبيت إضافة المتصفح</h2>
-      <p>الإضافة بتعرض لك تحديثات Moodle (ملفات جديدة، مواعيد تسليم، تعديلات) للمواد اللي بتتابعها، وبتحط 🔔 على صفحات Moodle. الموضوع بياخد حوالي 5 دقايق.</p>
-      <p class="mute"><b>محتاج:</b> متصفح Google Chrome على كمبيوتر (مش موبايل)، و<b>كود الإضافة</b> بتاعك: كود طويل من حروف وأرقام بيبعتهولك اللي ضافك للبوت. خليه معاك بس، لأنه بيفتح تحديثاتك.</p>
+      <h2>إيه هو LMS Guardian؟</h2>
+      <p>الـ Moodle (الـ LMS) بتاع الكلية والـ SIS مابيقولوش لك لما حاجة تتغير، لازم تفضل تدخل تشوف. LMS Guardian بيشيّك بدالك كل شوية، وبيبلّغك. وهو من جزئين شغالين مع بعض:</p>
+      <ul>
+        <li><b>بوت تيليجرام</b> (<code>@omar_lms_guardian_bot</code>): بيراقب Moodle لـ<b>المواد اللي إنت بتختارها</b> وبيبعتلك رسالة لما يحصل أي جديد.</li>
+        <li><b>إضافة المتصفح</b> (الصفحة دي): لوحة صغيرة في Chrome فيها كل حاجة في مكان واحد، وكمان بتقرا <b>درجات الـ SIS</b> بتاعتك.</li>
+      </ul>
     </div>
 
-    <div class="card step"><span class="num">1</span><h2>التحميل</h2>
+    <div class="card">
+      <h2>البوت بيعمل إيه لك (Moodle / LMS)</h2>
+      <ul>
+        <li>📄 <b>ملفات جديدة أو متحدّثة</b>: بيبعتلك الملف نفسه على تيليجرام (لحد 50 ميجا)، من غير ما تفتح Moodle.</li>
+        <li>🔄 <b>التعديلات والمسح</b>: ملف محاضرة اتبدّل أو اتغيّر اسمه أو اتمسح.</li>
+        <li>📝 <b>الأسايمنتات والكويزات</b>: الجديدة، ولما ميعاد التسليم أو الوقت يتغيّر.</li>
+        <li>💬 <b>بوستات الفورم</b>، و⏰ <b>المواعيد القريبة</b> (اكتب <code>/upcoming</code>).</li>
+      </ul>
+      <p><b>إنت اللي بتختار المواد.</b> ابعت <code>/subjects</code> للبوت واضغط على أزرار ✅/⬜. <b>استحمل شوية:</b> البوت بيشيّك تقريباً كل <b>دقيقتين</b>، فبيطبّق اللي ضغطت عليه في الفحص الجاي وبيرد عليك <b>مرة واحدة</b> بكل التغييرات. لو ضغطت على نفس المادة مرتين قبل ما يرد، بتتحسب ضغطة واحدة.</p>
+      <p class="mute">البوت بيقرا Moodle بس: مايقدرش يغيّر أي حاجة هناك، وعمره ما بيحتاج باسورد Moodle بتاعك.</p>
+    </div>
+
+    <div class="card">
+      <h2>الإضافة بتعمل إيه لك</h2>
+      <ul>
+        <li><b>Since last visit / History / Deadlines</b>: كل التحديثات في مكان واحد، تقدر تدوّر فيها، وفيها مقروء/مش مقروء. وعلى صفحات Moodle فيه 🔔 في الركن اللي تحت بعدد الحاجات اللي ما اتقرتش.</li>
+        <li><b>تاب Grades (الـ SIS)</b>: درجات موادك (Midterm وActivities وPractical وFinal) في جدول واحد نضيف، ودرجات الترمات اللي فاتت، وقايمة "آخر التغييرات". لما درجة تنزل أو تتغيّر بتظهر متلوّنة وعلى أيقونة الإضافة.</li>
+        <li><b>المرشد الأكاديمي (Advisor)</b>: الـ SIS مابيبلّغكش لما المرشد يرد عليك. الإضافة بتراقب المحادثة معاه وبتوريك الرسالة الجديدة.</li>
+        <li>على صفحات الـ SIS فيه زرار 🎓 في الركن اللي تحت بيفتح درجاتك. وماعدا كده مفيش أي حاجة في صفحات الـ SIS بتتغيّر.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>إزاي جزء الـ SIS بيشتغل (اقراه كويس)</h2>
+      <p>عكس Moodle، الـ SIS فيه <b>كابتشا</b> وقت تسجيل الدخول، فمفيش حد (ولا حتى البوت) يقدر يسجّل دخول بدالك. عشان كده درجات الـ SIS بتتقري من <b>الـ Chrome بتاعك إنت</b>:</p>
+      <ol>
+        <li><b>إنت اللي بتسجّل دخول الـ SIS بنفسك</b> عادي في Chrome وبتحل الكابتشا.</li>
+        <li>من بعدها الإضافة بتستخدم <b>جلستك إنت المسجّلة</b> عشان تقرا درجاتك، تقريباً كل 10 دقايق طول ما Chrome مفتوح. عمرها ما بتطلب باسورد الـ SIS ولا بتحفظه.</li>
+        <li>الـ SIS بيطلّعك لما تبقى ساكت فترة. عشان ده ما يحصلش، الإضافة بتبعت طلب صغير مالوش أي ضرر <b>كل دقيقتين</b> فالـ SIS بيشوفك نشيط وبيسيبك مسجّل.</li>
+      </ol>
+      <p><b>حاجات لازم تعرفها:</b></p>
+      <ul>
+        <li>الموضوع بيشتغل بس <b>وChrome مفتوح على الكمبيوتر</b>. لو Chrome مقفول أو الجهاز نايم مفيش فحص، وبيعوّض لما تفتح Chrome تاني.</li>
+        <li>لو اتطلّعت فعلاً (الـ SIS قفل الجلسة أو إنت عملت logout) الفحص <b>بيقف</b>. سجّل دخول تاني وبيكمّل لوحده. والإضافة بتقولك لما ده يحصل.</li>
+        <li>هي بتقرا <b>بس</b> درجاتك والدرجات النهائية ورسايل المرشد. مابتضغطش على حاجة ولا بتغيّر حاجة، ودرجاتك <b>بتفضل في متصفحك إنت</b>.</li>
+        <li>لو الكلية مخبّية درجاتك (مثلاً لحد ما المصاريف تتدفع) الإضافة بتقولك كده بدل ما تورّيك جداول فاضية.</li>
+        <li>Chrome على الكمبيوتر بس: مفيش نسخة للموبايل.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>التثبيت: حوالي 5 دقايق</h2>
+      <p class="mute"><b>محتاج:</b> متصفح Google Chrome على كمبيوتر (مش موبايل)، و<b>كود الإضافة</b> بتاعك: كود طويل من حروف وأرقام بيبعتهولك اللي ضافك. خليه معاك بس، لأنه بيفتح تحديثاتك.</p>
+    </div>
+
+    <div class="card step"><span class="num">1</span><h2>وصّل البوت (تيليجرام)</h2>
+      <div><p>افتح <b>لينك الدعوة</b> اللي اتبعتلك، واضغط <b>Start</b>، وبعدين ابعت <code>/subjects</code> واختار موادك. استنى حوالي دقيقتين لحد ما يرد.</p></div></div>
+
+    <div class="card step"><span class="num">2</span><h2>التحميل</h2>
       <div><a class="btn" href="https://github.com/OMAR6972/lms-guardian/archive/refs/heads/main.zip">⬇ تحميل الإضافة (ZIP)</a>
       <p class="mute" style="margin-top:6px">هينزل ملف اسمه <code>lms-guardian-main.zip</code>.</p></div></div>
 
-    <div class="card step"><span class="num">2</span><h2>فك الضغط في مكان ثابت</h2>
+    <div class="card step"><span class="num">3</span><h2>فك الضغط في مكان ثابت</h2>
       <div><p>افتح فولدر <b>Downloads</b>، اضغط كليك يمين على ملف الـ ZIP واختار <b>Extract All…</b> (استخراج الكل)، غيّر المكان لفولدر <b>Documents</b> (المستندات) واضغط <b>Extract</b>. على الماك: دبل كليك على الملف واسحب الفولدر الجديد لـ Documents.</p>
       <p class="mute">Chrome بيشغّل الإضافة من الفولدر ده، فما تمسحوش وما تنقلوش بعد كده.</p></div></div>
 
-    <div class="card step"><span class="num">3</span><h2>شغّل وضع المطوّر</h2>
+    <div class="card step"><span class="num">4</span><h2>شغّل وضع المطوّر</h2>
       <div><p>في Chrome اكتب <code>chrome://extensions</code><button class="copy" data-copy="chrome://extensions">نسخ</button> في شريط العنوان واضغط Enter. شغّل زرار <b>Developer mode</b> (وضع مطوّر البرامج) فوق على الجنب.</p></div></div>
 
-    <div class="card step"><span class="num">4</span><h2>حمّل الإضافة</h2>
+    <div class="card step"><span class="num">5</span><h2>حمّل الإضافة</h2>
       <div><p>اضغط <b>Load unpacked</b> (تحميل الإضافة غير المضغوطة). روح لـ <b>Documents ← lms-guardian-main</b>، واضغط مرة واحدة على الفولدر اللي اسمه <b><code>extension</code></b>، وبعدين <b>Select Folder</b> (اختيار مجلد).</p>
       <p class="mute">هيظهر كارت اسمه <b>LMS Guardian</b> عليه جرس أزرق.</p></div></div>
 
-    <div class="card step"><span class="num">5</span><h2>ثبّتها في الشريط</h2>
+    <div class="card step"><span class="num">6</span><h2>ثبّتها في الشريط</h2>
       <div><p>اضغط على أيقونة قطعة البازل 🧩 جنب شريط العنوان، وبعدين الدبوس 📌 جنب <b>LMS Guardian</b>.</p></div></div>
 
-    <div class="card step"><span class="num">6</span><h2>اكتب الكود بتاعك</h2>
+    <div class="card step"><span class="num">7</span><h2>اكتب الكود بتاعك</h2>
       <div><p>اضغط على الجرس الأزرق في الشريط، والصق كود الإضافة، واضغط <b>Save</b>.</p>
-      <p class="mute">هتلاقي اسمك فوق وتحديثاتك تحته. وعلى أي صفحة في Moodle هيظهر 🔔 في الركن تحت فيه عدد التحديثات اللي ما اتقرتش. زرار "Open in tab" بيفتحها في صفحة كاملة.</p></div></div>
+      <p class="mute">هتلاقي اسمك فوق وتحديثاتك تحته.</p></div></div>
+
+    <div class="card step"><span class="num">8</span><h2>سجّل دخول الـ SIS (عشان الدرجات)</h2>
+      <div><p>افتح الـ SIS في Chrome وسجّل دخول عادي. في خلال دقيقة افتح تاب <b>Grades</b> في الإضافة: درجاتك هتظهر هناك. سيب Chrome مفتوح والإضافة هتفضّلك مسجّل.</p></div></div>
 
     <div class="card">
       <h2>لو حصلت مشكلة</h2>
@@ -120,13 +230,15 @@ b{font-weight:700}
         <li><b>"Manifest file is missing"</b>: اخترت الفولدر الخارجي. اختار فولدر <code>extension</code> اللي جواه.</li>
         <li><b>"No updates for this code yet"</b>: الكود لسه معمول. استنى دقيقتين واضغط Save تاني.</li>
         <li><b>"This code doesn't open the feed"</b>: الكود اتنسخ غلط أو اتعمل كود جديد. اطلبه تاني.</li>
+        <li><b>تاب Grades بيقول إنك مش مسجّل في الـ SIS</b>: سجّل دخول الـ SIS تاني.</li>
       </ul>
     </div>
     <div class="card">
-      <h2>التحديث بعد كده</h2>
-      <p>لما يتقالك إن فيه نسخة جديدة: نزّل الـ ZIP تاني، وبدّل فولدر <code>lms-guardian-main</code> القديم في Documents، وبعدين اضغط السهم الدائري ↻ على كارت LMS Guardian في <code>chrome://extensions</code>. مش محتاج تكتب الكود تاني.</p>
+      <h2>التحديث بعد كده (بأمان)</h2>
+      <p>لما يتقالك إن فيه نسخة جديدة: نزّل الـ ZIP تاني و<b>انسخ الملفات الجديدة فوق القديمة، في نفس الفولدر</b> (اختار "Replace" / استبدال). وبعدين اضغط السهم الدائري ↻ على كارت LMS Guardian في <code>chrome://extensions</code>.</p>
+      <p class="note"><b>ماتضغطش "Remove" أبداً</b> على الكارت: ده بيمسح الكود بتاعك وهتكتبه من الأول. ولو لقيت <b>كارتين</b> LMS Guardian يبقى حمّلت نسخة تانية من فولدر مختلف: امسح الزيادة وسيب اللي ظبطته الأول.</p>
     </div>
-    <p class="mute note">الخصوصية: الإضافة عمرها ما بتطلب باسورد Moodle بتاعك. هي بتقرا بس ملف مقفول ما بيفتحوش غير الكود بتاعك، وفيه تحديثات موادك وبس.</p>
+    <p class="mute note">الخصوصية: الإضافة عمرها ما بتطلب باسورد Moodle ولا باسورد الـ SIS. تحديثات Moodle بتيجي من ملف مقفول ما بيفتحوش غير كودك إنت (موادك وبس). ودرجات الـ SIS بيقراها الـ Chrome بتاعك وبتفضل فيه.</p>
   </section>
 </main>
 <script>

@@ -91,9 +91,54 @@
     el.replaceChildren(...[].concat(node));
     return el;
   }
+  // Backup method: open each assignment's own page (read-only GET) and read "Submission status" and "Time remaining".
+  function rowVal(doc, label) {
+    for (const th of doc.querySelectorAll("th")) {
+      if (th.textContent.trim().toLowerCase() === label) { const td = th.nextElementSibling; if (td) return td.textContent.replace(/\s+/g, " ").trim(); }
+    }
+    return null;
+  }
+  async function pageFallback() {
+    const cards = [...document.querySelectorAll("li.activity.modtype_assign")];
+    if (!cards.length) return true; // nothing to check on this page
+    const todo = []; let ok = 0, i = 0;
+    const work = async () => {
+      while (i < cards.length) {
+        const li = cards[i++], a = li.querySelector("a.aalink, a[href*='/mod/assign/']"); if (!a) continue;
+        try {
+          const r = await fetch(a.href, { credentials: "same-origin" }); if (!r.ok) continue;
+          const doc = new DOMParser().parseFromString(await r.text(), "text/html");
+          const st = rowVal(doc, "submission status"); if (st == null) continue;
+          ok++;
+          const done = /submitted for grading|^submitted/i.test(st) && !/not submitted|no attempt|draft/i.test(st);
+          const left = rowVal(doc, "time remaining"), due = rowVal(doc, "due date");
+          if (done || (!left && !due)) continue;
+          const late = /overdue|late/i.test(left || "");
+          const txt = left ? (late ? left.replace(/^assignment is /i, "").replace(/by:\s*/i, "by ") : left + " left") : "due " + due;
+          if (!li.querySelector(".lmsg-badge")) {
+            const b = document.createElement("span"); b.className = "lmsg-badge" + (late ? " late" : "");
+            b.textContent = "Not submitted · " + txt;
+            const anchor = li.querySelector(".activityname, .instancename, a.aalink") || li;
+            (anchor.parentNode || li).insertBefore(b, anchor.nextSibling);
+          }
+          todo.push({ name: (a.textContent || "").trim(), url: a.href, txt, late });
+        } catch (e) { /* skip this one */ }
+      }
+    };
+    await Promise.all([work(), work(), work()]);
+    if (!ok) return false; // could not read any page: show the "couldn't load" message
+    if (todo.length) {
+      const parts = ["⏰ Still not submitted: "];
+      todo.slice(0, 5).forEach((x, k) => { if (k) parts.push(" · "); const el = document.createElement("a"); el.href = x.url; el.textContent = x.name; parts.push(el, ` — ${x.txt}`); });
+      strip(parts);
+    }
+    return true;
+  }
   async function badges() {
     let ev;
     try { ev = await loadEvents(); } catch (e) {
+      // The LMS data endpoint is down or slow: read each assignment page instead (same pages you can open yourself).
+      try { if (await pageFallback()) return; } catch (e2) { /* fall through to the message */ }
       const b = document.createElement("button"); b.textContent = "Try again"; b.style.cssText = "margin-left:8px;cursor:pointer";
       b.onclick = () => { strip("Loading deadlines…"); badges(); };
       strip(["⏰ Couldn't load your deadlines: the LMS didn't answer (it may be slow or busy right now).", b]); return;

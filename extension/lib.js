@@ -150,9 +150,10 @@ export function parseFinals(html) {
   const re = new RegExp(`<tr\\b[^>]*>\\s*((?:${TD}\\s*){6})<\\/tr>`, "g");
   for (let m; (m = re.exec(html || ""));) {
     const cells = (m[1].match(new RegExp(TD, "g")) || []).map(clean);
-    const [code, name, term, grade, gpa] = cells;
+    const [code, name, term, grade, gpa, hrs] = cells;
     if (!CODE.test(code) || !TERM.test(term) || !grade) continue;
-    out[`${code}|${term}`] = { code, name, term, grade, gpa };
+    const h = /(\d+(?:\.\d+)?)/.exec(hrs || "");
+    out[`${code}|${term}`] = { code, name, term, grade, gpa, hours: h ? Number(h[1]) : 0 };
   }
   return out;
 }

@@ -18,6 +18,7 @@
   }
   function nameFromUrl(u) { try { const p = new URL(u).pathname.split("/").filter(Boolean); return decodeURIComponent(p[p.length - 1] || "file"); } catch (e) { return "file"; } }
   if (typeof module !== "undefined") { module.exports = { timeLeft, cmidOf, safeName, nameFromDisposition, nameFromUrl }; }
+  if (typeof window !== "undefined") window.LMSG_TOOLS = { timeLeft, cmidOf, safeName };
   if (typeof document === "undefined" || typeof chrome === "undefined" || !chrome.storage) return;
   if (window.top !== window) return;
 

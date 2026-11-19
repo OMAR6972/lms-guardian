@@ -11,8 +11,9 @@ const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : "");
 // Moodle theme (dark mode for the LMS): saved in chrome.storage, picked up live by content script lms-theme.js.
 // The panel itself also goes dark when a dark theme is chosen.
 function paintPanel(choice) {
-  const dark = choice === "dark" || choice === "dim" || (choice === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
-  if (dark) document.documentElement.dataset.theme = "dark"; else delete document.documentElement.dataset.theme;
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const t = choice === "dim" ? "dark" : choice === "auto" ? (dark ? "dark" : "") : choice;
+  if (t && t !== "off") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
 }
 chrome.storage.local.get("lmsTheme", (v) => {
   const t = $("theme"); const cur = v.lmsTheme || "off";

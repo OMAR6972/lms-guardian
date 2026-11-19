@@ -8,6 +8,11 @@
 :root{--bg:#eef5fc;--panel:#fff;--panel2:#e6f0fb;--fg:#10243a;--mute:#5a7088;--line:#d5e3f3;--acc:#2f80d6;--acc-fg:#fff;--bad:#c23b3b;--ok:#16803c}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--bad:#ff9a92;--ok:#5fd68f}}
 :root[data-theme=dark]{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--bad:#ff9a92;--ok:#5fd68f}
+:root[data-theme=cyberpunk]{--bg:#050509;--panel:#0e0e16;--panel2:#1a1a26;--fg:#e9f7fa;--mute:#8a93a6;--line:#3b3b10;--acc:#fcee0a;--acc-fg:#050509;--bad:#ff2a55;--ok:#00ff9f}
+:root[data-theme=synthwave]{--bg:#160a2b;--panel:#221145;--panel2:#2e1a5e;--fg:#f6ecff;--mute:#b69ee0;--line:#4b2b8c;--acc:#ff4fd8;--acc-fg:#160a2b;--bad:#ff6b8b;--ok:#72f1b8}
+:root[data-theme=matrix]{--bg:#000;--panel:#02130a;--panel2:#04240f;--fg:#a8f5b4;--mute:#4fa862;--line:#0b5a22;--acc:#00ff41;--acc-fg:#000;--bad:#ff5555;--ok:#00ff41}
+:root[data-theme=matrix] body{font-family:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace}
+:root[data-theme=midnight]{--bg:#0a101d;--panel:#111a2d;--panel2:#192741;--fg:#e5ecf7;--mute:#8ea2c2;--line:#243652;--acc:#5ca9ff;--acc-fg:#06101f;--bad:#ff8a80;--ok:#5fd68f}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{width:420px;max-width:100%;min-height:520px;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:12px}
@@ -91,7 +96,7 @@ body.tab .filters{grid-template-columns:repeat(4,1fr)}
   <div id="visitRow" class="row" style="margin-bottom:8px" hidden><span class="mute">Summary for visit:</span><select id="visit" style="width:auto;flex:1"></select></div>
   <div id="list"></div>
 </div>
-<div class="row" style="margin-top:10px"><label class="mute" for="theme">Moodle theme (dark mode for the LMS)</label><select id="theme" style="width:auto"><option value="off">Off</option><option value="dark">Dark</option><option value="dim">Dim (softer)</option><option value="auto">Auto (follow my device)</option></select></div>
+<div class="row" style="margin-top:10px"><label class="mute" for="theme">Moodle theme (dark mode for the LMS)</label><select id="theme" style="width:auto"><option value="off">Off</option><option value="dark">Dark</option><option value="dim">Dim (softer)</option><option value="cyberpunk">Cyberpunk</option><option value="synthwave">Synthwave</option><option value="matrix">Matrix</option><option value="midnight">Midnight</option><option value="auto">Auto (follow my device)</option></select></div>
 <p class="mute" id="msg"></p>
 <script type="module" src="dashboard.js"></script>
 </body>

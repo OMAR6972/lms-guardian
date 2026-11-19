@@ -21,6 +21,11 @@ chrome.storage.local.get("lmsTheme", (v) => {
   t.onchange = () => { chrome.storage.local.set({ lmsTheme: t.value }); paintPanel(t.value); };
 });
 
+chrome.storage.local.get("lmsLayout", (v) => {
+  const l = $("layout"); l.value = v.lmsLayout || "normal";
+  l.onchange = () => chrome.storage.local.set({ lmsLayout: l.value });
+});
+
 function events() { return (S.st.history || []).slice().reverse(); }
 
 function evCard(e) {

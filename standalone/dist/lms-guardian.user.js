@@ -447,19 +447,37 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return null;
   }
   async function loadEvents() {
-    const key = sesskey(); if (!key) return [];
+    const key = sesskey(); if (!key) throw new Error("no sesskey");
     const method = "core_calendar_get_action_events_by_course";
-    const now = Math.floor(Date.now() / 1000);
-    const r = await fetch(`/lib/ajax/service.php?sesskey=${key}&info=${method}`, {
-      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ index: 0, methodname: method, args: { courseid: courseId, timesortfrom: now - 60 * 86400, limitnum: 100 } }]),
-    });
-    const j = await r.json();
-    if (!j[0] || j[0].error) return [];
-    return j[0].data.events || [];
+    let last;
+    for (let i = 0; i < 3; i++) { // the LMS is sometimes slow: wait up to 15 s, try 3 times
+      const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 15000);
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        const r = await fetch(`/lib/ajax/service.php?sesskey=${key}&info=${method}`, {
+          method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, signal: ac.signal,
+          body: JSON.stringify([{ index: 0, methodname: method, args: { courseid: courseId, timesortfrom: now - 60 * 86400, limitnum: 100 } }]),
+        });
+        const j = await r.json();
+        if (!j[0] || j[0].error) throw new Error("Moodle refused the deadlines request");
+        return j[0].data.events || [];
+      } catch (e) { last = e; await new Promise((ok) => setTimeout(ok, 2000 * (i + 1))); } finally { clearTimeout(timer); }
+    }
+    throw last;
+  }
+  function strip(node) {
+    let el = document.getElementById("lmsg-strip");
+    if (!el) { el = document.createElement("div"); el.id = "lmsg-strip"; (document.querySelector("#region-main, [role=main]") || document.body).prepend(el); }
+    el.replaceChildren(...[].concat(node));
+    return el;
   }
   async function badges() {
-    let ev; try { ev = await loadEvents(); } catch (e) { return; }
+    let ev;
+    try { ev = await loadEvents(); } catch (e) {
+      const b = document.createElement("button"); b.textContent = "Try again"; b.style.cssText = "margin-left:8px;cursor:pointer";
+      b.onclick = () => { strip("Loading deadlines…"); badges(); };
+      strip(["⏰ Couldn't load your deadlines: the LMS didn't answer (it may be slow or busy right now).", b]); return;
+    }
     const now = Date.now() / 1000, todo = [];
     for (const e of ev) {
       if (e.modulename !== "assign" && e.modulename !== "quiz") continue;
@@ -476,16 +494,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
       todo.push({ name: e.name, url: e.url, due, t });
     }
-    if (!todo.length || document.getElementById("lmsg-strip")) return;
+    if (!todo.length) { const old = document.getElementById("lmsg-strip"); if (old) old.remove(); return; }
     todo.sort((a, b) => a.due - b.due);
-    const strip = document.createElement("div"); strip.id = "lmsg-strip";
-    const items = todo.slice(0, 5).map((x) => {
-      const a = document.createElement("a"); a.href = x.url; a.textContent = x.name; return [a, ` — ${x.t.txt}`];
-    });
-    strip.append("⏰ Still not submitted: ");
-    items.forEach(([a, tx], i) => { if (i) strip.append(" · "); strip.append(a, tx); });
-    const host = document.querySelector("#region-main, [role=main]") || document.body;
-    host.insertBefore(strip, host.firstChild);
+    const parts = ["⏰ Still not submitted: "];
+    todo.slice(0, 5).forEach((x, i) => { if (i) parts.push(" · "); const a = document.createElement("a"); a.href = x.url; a.textContent = x.name; parts.push(a, ` — ${x.t.txt}`); });
+    strip(parts);
   }
 
   // ---------- Download whole subject ----------
@@ -602,8 +615,9 @@ label{display:block;margin:10px 0 4px;font-weight:600}`;
   async function actionEvents() {
     const key = sesskey(); if (!key) throw new Error("Open a normal Moodle page while logged in, then try again.");
     const method = "core_calendar_get_action_events_by_timesort";
+    const ac = new AbortController(); setTimeout(() => ac.abort(), 20000);
     const r = await fetch(`/lib/ajax/service.php?sesskey=${key}&info=${method}`, {
-      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, signal: ac.signal,
       body: JSON.stringify([{ index: 0, methodname: method, args: { timesortfrom: Math.floor(Date.now() / 1000) - 45 * 86400, limitnum: 60, limittononsuspendedevents: true } }]),
     });
     const j = await r.json();
@@ -620,7 +634,7 @@ label{display:block;margin:10px 0 4px;font-weight:600}`;
         const c = e.course && (e.course.fullname || e.course.shortname);
         return `<div class="card"><b>${esc(e.name)}</b><div class="mute">${esc(c || "")}</div><div class="${t.late ? "late" : ""}">${t.late ? "⚠ " : "⏰ "}${esc(t.txt)} · ${esc(new Date(e.timesort * 1000).toLocaleString())}</div>${u ? `<a href="${esc(u)}">Open</a>` : ""}</div>`;
       }).join("") : '<div class="card">Nothing is waiting. 🎉</div>');
-    } catch (e) { body.innerHTML = `<div class="card">${esc(e.message)}</div>`; }
+    } catch (e) { body.innerHTML = `<div class="card">Couldn't load your deadlines: the LMS didn't answer (it may be slow or busy). ${/sesskey|Open a normal/.test(e.message) ? esc(e.message) : ""}</div><button id="retry">Try again</button>`; const rb = body.querySelector("#retry"); if (rb) rb.onclick = showDue; }
   }
   async function showSet() {
     const v = await st.get(["lmsTheme", "lmsLayout"]);

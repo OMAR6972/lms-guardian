@@ -45,8 +45,9 @@ label{display:block;margin:10px 0 4px;font-weight:600}`;
   async function actionEvents() {
     const key = sesskey(); if (!key) throw new Error("Open a normal Moodle page while logged in, then try again.");
     const method = "core_calendar_get_action_events_by_timesort";
+    const ac = new AbortController(); setTimeout(() => ac.abort(), 20000);
     const r = await fetch(`/lib/ajax/service.php?sesskey=${key}&info=${method}`, {
-      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, signal: ac.signal,
       body: JSON.stringify([{ index: 0, methodname: method, args: { timesortfrom: Math.floor(Date.now() / 1000) - 45 * 86400, limitnum: 60, limittononsuspendedevents: true } }]),
     });
     const j = await r.json();
@@ -63,7 +64,7 @@ label{display:block;margin:10px 0 4px;font-weight:600}`;
         const c = e.course && (e.course.fullname || e.course.shortname);
         return `<div class="card"><b>${esc(e.name)}</b><div class="mute">${esc(c || "")}</div><div class="${t.late ? "late" : ""}">${t.late ? "⚠ " : "⏰ "}${esc(t.txt)} · ${esc(new Date(e.timesort * 1000).toLocaleString())}</div>${u ? `<a href="${esc(u)}">Open</a>` : ""}</div>`;
       }).join("") : '<div class="card">Nothing is waiting. 🎉</div>');
-    } catch (e) { body.innerHTML = `<div class="card">${esc(e.message)}</div>`; }
+    } catch (e) { body.innerHTML = `<div class="card">Couldn't load your deadlines: the LMS didn't answer (it may be slow or busy). ${/sesskey|Open a normal/.test(e.message) ? esc(e.message) : ""}</div><button id="retry">Try again</button>`; const rb = body.querySelector("#retry"); if (rb) rb.onclick = showDue; }
   }
   async function showSet() {
     const v = await st.get(["lmsTheme", "lmsLayout"]);

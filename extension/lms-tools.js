@@ -16,9 +16,28 @@
     let m = /filename\*=UTF-8''([^;]+)/i.exec(h); if (m) { try { return decodeURIComponent(m[1]); } catch (e) {} }
     m = /filename="?([^";]+)"?/i.exec(h); return m ? m[1] : null;
   }
+  // An assignment's own page (HTML text) -> {done, left, due} read from the "Submission status" table, or null if there is none.
+  function rowVal(doc, label) {
+    for (const th of doc.querySelectorAll("th")) {
+      if (th.textContent.trim().toLowerCase() === label) { const td = th.nextElementSibling; if (td) return td.textContent.replace(/\s+/g, " ").trim(); }
+    }
+    return null;
+  }
+  function assignInfo(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const st = rowVal(doc, "submission status"); if (st == null) return null;
+    const done = /submitted for grading|^submitted/i.test(st) && !/not submitted|no attempt|draft/i.test(st);
+    return { done, left: rowVal(doc, "time remaining"), due: rowVal(doc, "due date") };
+  }
+  // {late, txt} for a not-submitted assignment, or null when there is nothing to show
+  function assignText(info) {
+    if (!info || info.done || (!info.left && !info.due)) return null;
+    const late = /overdue|late/i.test(info.left || "");
+    return { late, txt: info.left ? (late ? info.left.replace(/^assignment is /i, "").replace(/by:\s*/i, "by ") : info.left + " left") : "due " + info.due };
+  }
   function nameFromUrl(u) { try { const p = new URL(u).pathname.split("/").filter(Boolean); return decodeURIComponent(p[p.length - 1] || "file"); } catch (e) { return "file"; } }
   if (typeof module !== "undefined") { module.exports = { timeLeft, cmidOf, safeName, nameFromDisposition, nameFromUrl }; }
-  if (typeof window !== "undefined") window.LMSG_TOOLS = { timeLeft, cmidOf, safeName };
+  if (typeof window !== "undefined") window.LMSG_TOOLS = { timeLeft, cmidOf, safeName, assignInfo, assignText };
   if (typeof document === "undefined" || typeof chrome === "undefined" || !chrome.storage) return;
   if (window.top !== window) return;
 
@@ -92,12 +111,6 @@
     return el;
   }
   // Backup method: open each assignment's own page (read-only GET) and read "Submission status" and "Time remaining".
-  function rowVal(doc, label) {
-    for (const th of doc.querySelectorAll("th")) {
-      if (th.textContent.trim().toLowerCase() === label) { const td = th.nextElementSibling; if (td) return td.textContent.replace(/\s+/g, " ").trim(); }
-    }
-    return null;
-  }
   async function pageFallback() {
     const cards = [...document.querySelectorAll("li.activity.modtype_assign")];
     if (!cards.length) return true; // nothing to check on this page
@@ -107,14 +120,10 @@
         const li = cards[i++], a = li.querySelector("a.aalink, a[href*='/mod/assign/']"); if (!a) continue;
         try {
           const r = await fetch(a.href, { credentials: "same-origin" }); if (!r.ok) continue;
-          const doc = new DOMParser().parseFromString(await r.text(), "text/html");
-          const st = rowVal(doc, "submission status"); if (st == null) continue;
+          const info = assignInfo(await r.text()); if (!info) continue;
           ok++;
-          const done = /submitted for grading|^submitted/i.test(st) && !/not submitted|no attempt|draft/i.test(st);
-          const left = rowVal(doc, "time remaining"), due = rowVal(doc, "due date");
-          if (done || (!left && !due)) continue;
-          const late = /overdue|late/i.test(left || "");
-          const txt = left ? (late ? left.replace(/^assignment is /i, "").replace(/by:\s*/i, "by ") : left + " left") : "due " + due;
+          const t = assignText(info); if (!t) continue;
+          const late = t.late, txt = t.txt;
           if (!li.querySelector(".lmsg-badge")) {
             const b = document.createElement("span"); b.className = "lmsg-badge" + (late ? " late" : "");
             b.textContent = "Not submitted · " + txt;

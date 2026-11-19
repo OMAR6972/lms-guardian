@@ -65,7 +65,33 @@ label{display:block;margin:10px 0 4px;font-weight:600}`;
         const c = e.course && (e.course.fullname || e.course.shortname);
         return `<div class="card"><b>${esc(e.name)}</b><div class="mute">${esc(c || "")}</div><div class="${t.late ? "late" : ""}">${t.late ? "⚠ " : "⏰ "}${esc(t.txt)} · ${esc(new Date(e.timesort * 1000).toLocaleString())}</div>${u ? `<a href="${esc(u)}">Open</a>` : ""}</div>`;
       }).join("") : '<div class="card">Nothing is waiting. 🎉</div>');
-    } catch (e) { body.innerHTML = `<div class="card">Couldn't load the full deadline list: the LMS didn't answer (it may be slow or busy). Open a course page instead: the “Not submitted” badges there use a backup method. ${/sesskey|Open a normal/.test(e.message) ? esc(e.message) : ""}</div><button id="retry">Try again</button>`; const rb = body.querySelector("#retry"); if (rb) rb.onclick = showDue; }
+    } catch (e0) {
+      try { if (await slowDue()) return; } catch (e1) { console.log("slowDue failed", e1 && e1.message); }
+      const e = e0;
+      body.innerHTML = `<div class="card">Couldn't load the full deadline list: the LMS didn't answer (it may be slow or busy). Open a course page instead: the “Not submitted” badges there use a backup method. ${/sesskey|Open a normal/.test(e.message) ? esc(e.message) : ""}</div><button id="retry">Try again</button>`; const rb = body.querySelector("#retry"); if (rb) rb.onclick = showDue; }
+  }
+  // Backup when the LMS data service times out: course list from your profile page, then each course page, then each assignment page.
+  async function slowDue() {
+    body.innerHTML = '<div class="mute">The LMS data service is not answering, so I am reading your course pages instead. This can take up to a minute…</div><div id="res" style="margin-top:8px"></div>';
+    const res = body.querySelector("#res"), get = async (u) => { const r = await fetch(u, { credentials: "same-origin" }); if (!r.ok) throw new Error(r.status); return r.text(); };
+    const prof = new DOMParser().parseFromString(await get("/user/profile.php"), "text/html"), courses = new Map();
+    prof.querySelectorAll('a[href*="course="]').forEach((a) => { const m = /[?&]course=(\d+)/.exec(a.getAttribute("href")); const n = a.textContent.replace(/\s+/g, " ").trim(); if (m && n && !courses.has(m[1])) courses.set(m[1], n); });
+    if (!courses.size) return false;
+    let found = 0, read = 0;
+    for (const [id, name] of courses) {
+      let doc; try { doc = new DOMParser().parseFromString(await get("/course/view.php?id=" + id), "text/html"); } catch (e) { continue; }
+      const links = [...doc.querySelectorAll("li.activity.modtype_assign a.aalink, li.activity.modtype_assign a[href*='/mod/assign/']")].map((a) => [a.textContent.trim(), new URL(a.getAttribute("href"), location.href).href]);
+      let i = 0;
+      const work = async () => { while (i < links.length) { const [n, u] = links[i++]; try {
+        const info = T().assignInfo(await get(u)); if (!info) continue; read++;
+        const t = T().assignText(info); if (!t) continue; found++;
+        res.insertAdjacentHTML("beforeend", `<div class="card"><b>${esc(n)}</b><div class="mute">${esc(name)}</div><div class="${t.late ? "late" : ""}">${t.late ? "⚠ " : "⏰ "}${esc(t.txt)}</div>${safe(u) ? `<a href="${esc(u)}">Open</a>` : ""}</div>`); } catch (e) { /* skip */ } } };
+      await Promise.all([work(), work(), work()]);
+    }
+    if (!read) return false;
+    if (!found) res.innerHTML = '<div class="card">Nothing is waiting. 🎉</div>';
+    body.querySelector(".mute").textContent = "Read from your course pages (the LMS data service is not answering). Assignments only.";
+    return true;
   }
   async function showSet() {
     const v = await st.get(["lmsTheme", "lmsLayout"]);

@@ -10,6 +10,11 @@
     for (const [m, g] of MIN) if (p >= m) return g;
     return "F";
   }
+  // lowest percent that still gives this letter, and how many marks you may lose out of 100 to keep it
+  function minPct(letter) { const m = MIN.find((x) => x[1] === letter); return m ? m[0] : letter === "F" ? 0 : null; }
+  function maxLost(letter) { const m = minPct(letter); return m == null ? null : 100 - m; }
+  // marks lost out of 100 -> letter
+  function lostToGrade(l) { const n = Number(l); return l === "" || l == null || !isFinite(n) || n < 0 || n > 100 ? "" : pctToGrade(100 - n); }
   function normGrade(s) {
     const g = String(s == null ? "" : s).trim().toUpperCase().replace(/\s+/g, "");
     return Object.prototype.hasOwnProperty.call(POINTS, g) ? g : "";
@@ -35,11 +40,11 @@
     const rows = [], have = new Set();
     Object.values(finals || {}).sort((a, b) => termKey(a.term) - termKey(b.term) || String(a.code).localeCompare(b.code)).forEach((f) => {
       have.add(f.code + "|" + f.term);
-      rows.push({ key: "sis:" + f.code + "|" + f.term, name: `${f.code} — ${f.name}`, term: f.term, hours: f.hours || "", grade: normGrade(f.grade), pct: "" });
+      rows.push({ key: "sis:" + f.code + "|" + f.term, name: `${f.code} — ${f.name}`, term: f.term, hours: f.hours || "", grade: normGrade(f.grade), lost: "" });
     });
     Object.entries(courses || {}).forEach(([code, c]) => {
       if (have.has(code + "|" + c.term)) return;
-      rows.push({ key: "sis:" + code + "|" + c.term, name: `${code} — ${c.name}`, term: c.term, hours: "", grade: "", pct: "" });
+      rows.push({ key: "sis:" + code + "|" + c.term, name: `${code} — ${c.name}`, term: c.term, hours: "", grade: "", lost: "" });
     });
     return rows;
   }
@@ -47,10 +52,10 @@
   function merge(existing, fresh) {
     const mine = (existing || []).filter((r) => !String(r.key || "").startsWith("sis:"));
     const old = new Map((existing || []).filter((r) => String(r.key || "").startsWith("sis:")).map((r) => [r.key, r]));
-    const sis = fresh.map((r) => { const o = old.get(r.key); return o && !r.grade && o.grade ? { ...r, grade: o.grade, pct: o.pct || "", hours: r.hours || o.hours } : o && !r.hours && o.hours ? { ...r, hours: o.hours } : r; });
+    const sis = fresh.map((r) => { const o = old.get(r.key); return o && !r.grade && o.grade ? { ...r, grade: o.grade, lost: o.lost || "", hours: r.hours || o.hours } : o && !r.hours && o.hours ? { ...r, hours: o.hours } : r; });
     return sis.concat(mine);
   }
-  const api = { POINTS, LETTERS, MIN, pctToGrade, normGrade, calc, termKey, fromSis, merge };
+  const api = { POINTS, LETTERS, MIN, pctToGrade, minPct, maxLost, lostToGrade, normGrade, calc, termKey, fromSis, merge };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.LMSG_GPA = api;
 })(typeof window !== "undefined" ? window : typeof self !== "undefined" ? self : globalThis);

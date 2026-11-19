@@ -24,6 +24,13 @@
     let rows = [], timer = null;
     const persist = () => { clearTimeout(timer); timer = setTimeout(() => io.save(rows), 250); };
     const html = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    function hintFor(r) {
+      if (!r.grade) return r.term || "";
+      const min = G.minPct(r.grade), lost = G.maxLost(r.grade), t = r.term ? r.term + " · " : "";
+      if (r.grade === "A+") return t + "A+ needs 97+ (lose at most 3). A gives the same 4.0 from 93 (lose at most 7).";
+      if (r.grade === "F") return t + "below 60";
+      return `${t}to get ${r.grade}: at least ${min}/100, so lose at most ${lost} marks`;
+    }
     function summary() {
       const r = G.calc(rows), box = root_.querySelector(".sum");
       box.innerHTML = `<div class="big">${r.counted ? r.gpa.toFixed(2) : "—"}</div><div class="mute">${r.counted} subjects · ${r.hours} credit hours counted. Rows with no grade are ignored (use them for “what if”).</div>`;
@@ -32,22 +39,23 @@
       root_.innerHTML = `<div class="sum"></div>
 <div class="bar"><button class="pri" data-a="sis">Fill from my SIS</button><button data-a="add">+ Add subject</button><button data-a="clear">Clear all</button></div>
 <div class="mute" data-r="hint"></div>
-<div class="rowg head"><span>Subject</span><span>Hours</span><span>%</span><span>Grade</span><span></span></div>
+<div class="rowg head"><span>Subject</span><span>Hours</span><span>Lose</span><span>Grade</span><span></span></div>
 <div data-r="list"></div>
-<div class="scale mute">Scale: A+ and A = 4.0 · A- 3.7 · B+ 3.3 · B 3.0 · B- 2.7 · C+ 2.3 · C 2.0 · C- 1.7 · D+ 1.3 · D 1.0 · F 0. Typing a percentage picks the letter for you (97+ A+, 93 A, 89 A-, 84 B+, 80 B, 76 B-, 73 C+, 70 C, 67 C-, 64 D+, 60 D).</div>`;
+<div class="scale mute">Scale: A+ and A = 4.0 · A- 3.7 · B+ 3.3 · B 3.0 · B- 2.7 · C+ 2.3 · C 2.0 · C- 1.7 · D+ 1.3 · D 1.0 · F 0. Two ways to fill a row: pick the grade you assume (it shows the lowest mark that still gives it and how many marks you can lose), or type how many marks out of 100 you expect to lose and the letter is picked for you. To keep each letter you need at least: A 93 · A- 89 · B+ 84 · B 80 · B- 76 · C+ 73 · C 70 · C- 67 · D+ 64 · D 60.</div>`;
       const list = root_.querySelector('[data-r="list"]');
       rows.forEach((r, i) => {
         const d = document.createElement("div"); d.className = "rowg" + (r.grade ? "" : " empty");
-        d.innerHTML = `<div><input class="nm" data-k="name" value="${html(r.name)}" placeholder="Subject name">${r.term ? `<div class="mute">${html(r.term)}</div>` : ""}</div>
+        d.innerHTML = `<div><input class="nm" data-k="name" value="${html(r.name)}" placeholder="Subject name"><div class="mute" data-r="hint">${html(hintFor(r))}</div></div>
 <input data-k="hours" type="number" min="0" step="0.5" inputmode="decimal" value="${html(r.hours)}">
-<input data-k="pct" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="${html(r.pct)}" placeholder="%">
+<input data-k="lost" type="number" min="0" max="100" step="0.5" inputmode="decimal" value="${html(r.lost)}" placeholder="marks">
 <select data-k="grade"><option value=""></option>${G.LETTERS.map((l) => `<option${l === r.grade ? " selected" : ""}>${l}</option>`).join("")}</select>
 <button class="x" data-a="del" title="Remove">✕</button>`;
         d.oninput = (e) => {
           const k = e.target.dataset.k; if (!k) return;
           r[k] = e.target.value;
-          if (k === "pct") { r.grade = G.pctToGrade(r.pct); d.querySelector('[data-k="grade"]').value = r.grade; }
-          if (k === "grade") { r.pct = ""; d.querySelector('[data-k="pct"]').value = ""; }
+          if (k === "lost") { r.grade = G.lostToGrade(r.lost); d.querySelector('[data-k="grade"]').value = r.grade; }
+          if (k === "grade") { r.lost = ""; d.querySelector('[data-k="lost"]').value = ""; }
+          d.querySelector('[data-r="hint"]').textContent = hintFor(r);
           d.classList.toggle("empty", !r.grade);
           summary(); persist();
         };
@@ -59,7 +67,7 @@
     }
     root_.onclick = async (e) => {
       const a = e.target.dataset && e.target.dataset.a; if (!a) return;
-      if (a === "add") { rows.push({ name: "", hours: "", grade: "", pct: "" }); persist(); draw(); const n = root_.querySelectorAll(".nm"); n[n.length - 1].focus(); }
+      if (a === "add") { rows.push({ name: "", hours: "", grade: "", lost: "" }); persist(); draw(); const n = root_.querySelectorAll(".nm"); n[n.length - 1].focus(); }
       if (a === "clear" && rows.length && confirm("Remove every subject from the list?")) { rows = []; persist(); draw(); }
       if (a === "sis") {
         const s = io.sis ? await io.sis() : null;

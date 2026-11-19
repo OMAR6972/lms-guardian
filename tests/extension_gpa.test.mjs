@@ -4,6 +4,8 @@ import fs from "node:fs";
 const G = createRequire(import.meta.url)("../extension/gpa.js");
 // scale from the college table
 for (const [p, g] of [[100, "A+"], [97, "A+"], [96.9, "A"], [93, "A"], [92.9, "A-"], [89, "A-"], [88.9, "B+"], [84, "B+"], [80, "B"], [76, "B-"], [73, "C+"], [70, "C"], [67, "C-"], [64, "D+"], [60, "D"], [59.9, "F"], [0, "F"]]) assert.equal(G.pctToGrade(p), g, p);
+assert.equal(G.lostToGrade(4), "A"); assert.equal(G.lostToGrade(3), "A+"); assert.equal(G.lostToGrade(16), "B+"); assert.equal(G.lostToGrade(17), "B"); assert.equal(G.lostToGrade(41), "F"); assert.equal(G.lostToGrade(""), "");
+assert.equal(G.maxLost("B+"), 16); assert.equal(G.maxLost("A"), 7); assert.equal(G.maxLost("D"), 40); assert.equal(G.minPct("C+"), 73);
 assert.equal(G.POINTS["A+"], 4); assert.equal(G.POINTS["A"], 4); assert.equal(G.POINTS["A-"], 3.7); assert.equal(G.POINTS["B+"], 3.3); assert.equal(G.POINTS["D"], 1); assert.equal(G.POINTS["F"], 0);
 // GPA: hours-weighted; empty grade / no hours rows are ignored; F counts as 0 points but its hours count
 const r = G.calc([{ hours: 3, grade: "A" }, { hours: 3, grade: "B+" }, { hours: 2, grade: "A-" }, { hours: 3, grade: "" }, { hours: "", grade: "A" }]);

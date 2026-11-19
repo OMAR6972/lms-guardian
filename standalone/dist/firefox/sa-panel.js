@@ -13,6 +13,7 @@
 .panel{position:fixed;right:18px;bottom:148px;z-index:2147483646;width:min(430px,calc(100vw - 36px));height:min(640px,calc(100vh - 176px));background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;font:14px system-ui,sans-serif;
 --bg:#fff;--panel:#fff;--panel2:#eef5fc;--fg:#10243a;--mute:#5b7491;--line:#d5e3f3;--acc:#2f80d6;--acc-fg:#fff;--bad:#b3261e}
 .panel.dark{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--bad:#ff9a92}
+.panel[hidden]{display:none}
 .hd{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line)}
 .hd b{flex:1}.hd button{border:0;background:none;color:var(--fg);font-size:18px;cursor:pointer}
 .tabs{display:flex;gap:4px;padding:6px 8px;border-bottom:1px solid var(--line)}
@@ -64,7 +65,7 @@ label{display:block;margin:10px 0 4px;font-weight:600}`;
         const c = e.course && (e.course.fullname || e.course.shortname);
         return `<div class="card"><b>${esc(e.name)}</b><div class="mute">${esc(c || "")}</div><div class="${t.late ? "late" : ""}">${t.late ? "⚠ " : "⏰ "}${esc(t.txt)} · ${esc(new Date(e.timesort * 1000).toLocaleString())}</div>${u ? `<a href="${esc(u)}">Open</a>` : ""}</div>`;
       }).join("") : '<div class="card">Nothing is waiting. 🎉</div>');
-    } catch (e) { body.innerHTML = `<div class="card">Couldn't load your deadlines: the LMS didn't answer (it may be slow or busy). ${/sesskey|Open a normal/.test(e.message) ? esc(e.message) : ""}</div><button id="retry">Try again</button>`; const rb = body.querySelector("#retry"); if (rb) rb.onclick = showDue; }
+    } catch (e) { body.innerHTML = `<div class="card">Couldn't load the full deadline list: the LMS didn't answer (it may be slow or busy). Open a course page instead: the “Not submitted” badges there use a backup method. ${/sesskey|Open a normal/.test(e.message) ? esc(e.message) : ""}</div><button id="retry">Try again</button>`; const rb = body.querySelector("#retry"); if (rb) rb.onclick = showDue; }
   }
   async function showSet() {
     const v = await st.get(["lmsTheme", "lmsLayout"]);

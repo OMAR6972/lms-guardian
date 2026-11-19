@@ -21,8 +21,8 @@ for (const n of ["cyberpunk", "synthwave", "matrix", "midnight"]) {
 }
 // catch-all for light backgrounds
 const cy = PALETTES.cyberpunk;
-assert.equal(darkenBg("rgb(255, 255, 255)", cy), "rgb(14,14,22)", "white becomes the panel colour");
-assert.equal(darkenBg("rgb(248, 249, 250)", cy), "rgb(14,14,22)");
+assert.equal(darkenBg("rgb(255, 255, 255)", cy), "rgb(5,5,9)", "white blends into the page, so layouts do not turn into stacked boxes");
+assert.equal(darkenBg("rgb(248, 249, 250)", cy), "rgb(5,5,9)");
 assert.equal(darkenBg("rgb(222, 226, 230)", cy), "rgb(26,26,38)", "light grey becomes the input/hover colour");
 assert.notEqual(darkenBg("rgb(212, 237, 218)", cy), "rgb(14,14,22)", "pale green keeps a greenish tint");
 assert.equal(darkenBg("rgb(14, 14, 22)", cy), null, "already dark: untouched");
@@ -31,6 +31,11 @@ assert.equal(darkenBg("rgb(252, 238, 10)", cy), null, "vivid accent colours: unt
 assert.equal(needsLightText("rgb(33, 37, 41)", "rgb(14, 14, 22)"), true, "dark text on a dark background");
 assert.equal(needsLightText("rgb(5, 5, 9)", "rgb(252, 238, 10)"), false, "dark text on a bright button stays");
 assert.equal(needsLightText("rgb(233, 247, 250)", "rgb(14, 14, 22)"), false, "light text is fine");
+for (const n of ["cyberpunk", "synthwave", "matrix", "midnight"]) {
+  const css = themeCss(n);
+  assert.ok(/#page-header[^{]*\{background:transparent/.test(css), n + ": header, tabs and sections are transparent (no stacked boxes)");
+  assert.ok(css.includes("scrollbar-color"), n + ": scrollbars follow the theme");
+}
 assert.equal(resolve("dark"), "dark");
 assert.equal(resolve("dim"), "dim");
 assert.equal(resolve("off"), "off");

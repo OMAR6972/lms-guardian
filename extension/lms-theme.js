@@ -32,10 +32,12 @@ img.icon,.icon img{filter:none!important}
     const caps = p.caps ? "text-transform:uppercase!important;letter-spacing:.06em!important;" : "";
     const cut = p.cut ? `clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))!important;` : "";
     const font = p.font ? `font-family:${p.font}!important;` : "";
-    const bgs = `.drawer,.drawer-left,.drawer-right,.courseindex,.block,.card,.card-body,.card-header,.card-footer,.activity-item,.course-section,.modal-content,.dropdown-menu,.popover,.popover-body,.list-group-item,.jumbotron,.alert,.box,.generalbox,.que .content,.que .info,.moodle-dialogue-base .moodle-dialogue-wrap,.bg-white,.bg-light,.bg-secondary,.activity-header,.activity-information,.description,.footer-popover,.tox,.tox-tinymce`;
-    return `html{color-scheme:dark;scrollbar-color:${p.ac} ${p.bg}}
+    const bgs = `.drawer,.drawer-left,.drawer-right,.courseindex,.block,.card,.card-body,.card-header,.card-footer,.activity-item,.modal-content,.dropdown-menu,.popover,.popover-body,.list-group-item,.jumbotron,.alert,.box,.generalbox,.que .content,.que .info,.moodle-dialogue-base .moodle-dialogue-wrap,.bg-white,.bg-light,.bg-secondary,.footer-popover,.tox,.tox-tinymce`;
+    return `html{color-scheme:dark}
+*{color-scheme:dark;scrollbar-color:${p.ac} ${p.bg}}
 html,body,#page,#page-wrapper,#page-content,#region-main,#region-main-box,.main-inner,.drawers,.pagelayout-login #page{background:${p.bg}!important;color:${p.tx}!important;${font}}
-#page-header,.primary-navigation,.navbar,.fixed-top,.moremenu,.secondary-navigation,.tertiary-navigation,#page-footer,.nav-tabs,.breadcrumb{background:${p.pn}!important;border-color:${p.ln}!important}
+#page-header,.secondary-navigation,.tertiary-navigation,.moremenu,.nav-tabs,.breadcrumb,.course-section,.course-content,.section-item,.activity-header,.activity-information,.description,.page-context-header,.page-header-headings,.drawer-toggles{background:transparent!important;border-color:${p.ln}!important}
+.primary-navigation,.navbar,.fixed-top,#page-footer{background:${p.pn}!important;border-color:${p.ln}!important}
 ${bgs}{background-color:${p.pn}!important;color:${p.tx}!important;border-color:${p.ln}!important}
 .courseindex .courseindex-item:hover,.list-group-item-action:hover,.dropdown-item:hover,.table-hover tbody tr:hover{background-color:${p.p2}!important}
 .table,.generaltable,.table th,.table td,.generaltable th,.generaltable td{background-color:transparent!important;color:${p.tx}!important;border-color:${p.ln}!important}
@@ -84,12 +86,12 @@ body,button,input,select,textarea{${font}}`;
   function darkenBg(str, p) {
     const c = parseRgb(str);
     if (!c || !(c.a >= 0.5) || lum(c.r, c.g, c.b) < 0.55) return null;
-    const pn = hexRgb(p.pn), p2 = hexRgb(p.p2);
+    const pn = hexRgb(p.pn), p2 = hexRgb(p.p2), bg = hexRgb(p.bg);
     const sat = Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
     if (sat > 120) return null; // vivid colours (the accent buttons, status badges) are left as they are
     let out;
     if (sat > 15) out = [0, 1, 2].map((i) => Math.round(pn[i] * 0.72 + [c.r, c.g, c.b][i] * 0.28));
-    else out = lum(c.r, c.g, c.b) > 0.93 ? pn : p2;
+    else out = lum(c.r, c.g, c.b) > 0.93 ? bg : p2;
     return `rgb(${out[0]},${out[1]},${out[2]})`;
   }
   // Dark text is only a problem on a dark background; bright backgrounds (the accent buttons) keep their dark text.

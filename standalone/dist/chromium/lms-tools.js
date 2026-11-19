@@ -67,19 +67,37 @@
     return null;
   }
   async function loadEvents() {
-    const key = sesskey(); if (!key) return [];
+    const key = sesskey(); if (!key) throw new Error("no sesskey");
     const method = "core_calendar_get_action_events_by_course";
-    const now = Math.floor(Date.now() / 1000);
-    const r = await fetch(`/lib/ajax/service.php?sesskey=${key}&info=${method}`, {
-      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ index: 0, methodname: method, args: { courseid: courseId, timesortfrom: now - 60 * 86400, limitnum: 100 } }]),
-    });
-    const j = await r.json();
-    if (!j[0] || j[0].error) return [];
-    return j[0].data.events || [];
+    let last;
+    for (let i = 0; i < 3; i++) { // the LMS is sometimes slow: wait up to 15 s, try 3 times
+      const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 15000);
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        const r = await fetch(`/lib/ajax/service.php?sesskey=${key}&info=${method}`, {
+          method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, signal: ac.signal,
+          body: JSON.stringify([{ index: 0, methodname: method, args: { courseid: courseId, timesortfrom: now - 60 * 86400, limitnum: 100 } }]),
+        });
+        const j = await r.json();
+        if (!j[0] || j[0].error) throw new Error("Moodle refused the deadlines request");
+        return j[0].data.events || [];
+      } catch (e) { last = e; await new Promise((ok) => setTimeout(ok, 2000 * (i + 1))); } finally { clearTimeout(timer); }
+    }
+    throw last;
+  }
+  function strip(node) {
+    let el = document.getElementById("lmsg-strip");
+    if (!el) { el = document.createElement("div"); el.id = "lmsg-strip"; (document.querySelector("#region-main, [role=main]") || document.body).prepend(el); }
+    el.replaceChildren(...[].concat(node));
+    return el;
   }
   async function badges() {
-    let ev; try { ev = await loadEvents(); } catch (e) { return; }
+    let ev;
+    try { ev = await loadEvents(); } catch (e) {
+      const b = document.createElement("button"); b.textContent = "Try again"; b.style.cssText = "margin-left:8px;cursor:pointer";
+      b.onclick = () => { strip("Loading deadlines…"); badges(); };
+      strip(["⏰ Couldn't load your deadlines: the LMS didn't answer (it may be slow or busy right now).", b]); return;
+    }
     const now = Date.now() / 1000, todo = [];
     for (const e of ev) {
       if (e.modulename !== "assign" && e.modulename !== "quiz") continue;
@@ -96,16 +114,11 @@
       }
       todo.push({ name: e.name, url: e.url, due, t });
     }
-    if (!todo.length || document.getElementById("lmsg-strip")) return;
+    if (!todo.length) { const old = document.getElementById("lmsg-strip"); if (old) old.remove(); return; }
     todo.sort((a, b) => a.due - b.due);
-    const strip = document.createElement("div"); strip.id = "lmsg-strip";
-    const items = todo.slice(0, 5).map((x) => {
-      const a = document.createElement("a"); a.href = x.url; a.textContent = x.name; return [a, ` — ${x.t.txt}`];
-    });
-    strip.append("⏰ Still not submitted: ");
-    items.forEach(([a, tx], i) => { if (i) strip.append(" · "); strip.append(a, tx); });
-    const host = document.querySelector("#region-main, [role=main]") || document.body;
-    host.insertBefore(strip, host.firstChild);
+    const parts = ["⏰ Still not submitted: "];
+    todo.slice(0, 5).forEach((x, i) => { if (i) parts.push(" · "); const a = document.createElement("a"); a.href = x.url; a.textContent = x.name; parts.push(a, ` — ${x.t.txt}`); });
+    strip(parts);
   }
 
   // ---------- Download whole subject ----------

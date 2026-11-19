@@ -60,7 +60,8 @@ hr,.border,.border-bottom,.border-top{border-color:${p.ln}!important}
 .card,.activity-item,.block{${p.cut ? `border-left:3px solid ${p.hd}!important;` : ""}}
 .activity-item,.card{${p.glow ? `box-shadow:0 0 12px ${p.glow}1f!important;` : ""}}
 .icon,.fa,.navbar-toggler,.navbar .btn,.navbar .nav-link,.usermenu .dropdown-toggle,#user-menu-toggle,.btn-icon,.fa-bars{color:${p.ac}!important}
-.navbar-toggler-icon{filter:invert(1)!important}
+.navbar-toggler-icon{filter:invert(1) brightness(3)!important}
+.btn,.form-control,.custom-select,.nav-link,a,.dropdown-item{transition:none!important}
 .drawer-toggler .btn .icon,.drawer-toggler .btn .fa,.btn-footer-popover .icon,.btn-primary .icon,.btn-primary .fa{color:${p.bt}!important}
 .userinitials,.avatar{background:${p.p2}!important;color:${p.hd}!important}
 img.icon,.icon img{filter:invert(1) brightness(1.6)!important}

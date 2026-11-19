@@ -8,6 +8,18 @@ const when = (t) => new Date(t * 1000).toLocaleString([], { weekday: "short", mo
 const full = (cid) => { const i = cid == null ? null : S.st.course_info[String(cid)]; return cid == null ? "SIS grades" : i ? `${i.code} — ${i.name}` : `course ${cid}`; };
 const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : "");
 
+// Moodle theme (dark mode for the LMS): saved in chrome.storage, picked up live by content script lms-theme.js.
+// The panel itself also goes dark when a dark theme is chosen.
+function paintPanel(choice) {
+  const dark = choice === "dark" || choice === "dim" || (choice === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  if (dark) document.documentElement.dataset.theme = "dark"; else delete document.documentElement.dataset.theme;
+}
+chrome.storage.local.get("lmsTheme", (v) => {
+  const t = $("theme"); const cur = v.lmsTheme || "off";
+  t.value = cur; paintPanel(cur);
+  t.onchange = () => { chrome.storage.local.set({ lmsTheme: t.value }); paintPanel(t.value); };
+});
+
 function events() { return (S.st.history || []).slice().reverse(); }
 
 function evCard(e) {

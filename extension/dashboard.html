@@ -7,6 +7,7 @@
 <style>
 :root{--bg:#eef5fc;--panel:#fff;--panel2:#e6f0fb;--fg:#10243a;--mute:#5a7088;--line:#d5e3f3;--acc:#2f80d6;--acc-fg:#fff;--bad:#c23b3b;--ok:#16803c}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--bad:#ff9a92;--ok:#5fd68f}}
+:root[data-theme=dark]{--bg:#0d1824;--panel:#14263a;--panel2:#1b3149;--fg:#eaf3fc;--mute:#97aec6;--line:#25405c;--acc:#6db4f5;--acc-fg:#06223e;--bad:#ff9a92;--ok:#5fd68f}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{width:420px;max-width:100%;min-height:520px;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:12px}
@@ -90,6 +91,7 @@ body.tab .filters{grid-template-columns:repeat(4,1fr)}
   <div id="visitRow" class="row" style="margin-bottom:8px" hidden><span class="mute">Summary for visit:</span><select id="visit" style="width:auto;flex:1"></select></div>
   <div id="list"></div>
 </div>
+<div class="row" style="margin-top:10px"><label class="mute" for="theme">Moodle theme (dark mode for the LMS)</label><select id="theme" style="width:auto"><option value="off">Off</option><option value="dark">Dark</option><option value="dim">Dim (softer)</option><option value="auto">Auto (follow my device)</option></select></div>
 <p class="mute" id="msg"></p>
 <script type="module" src="dashboard.js"></script>
 </body>

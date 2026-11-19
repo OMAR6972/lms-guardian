@@ -65,7 +65,7 @@ hr,.border,.border-bottom,.border-top{border-color:${p.ln}!important}
 .navbar-toggler-icon{filter:invert(1) brightness(3)!important}
 .btn,.form-control,.custom-select,.nav-link,a,.dropdown-item{transition:none!important}
 .drawer-toggler .btn .icon,.drawer-toggler .btn .fa,.btn-footer-popover .icon,.btn-primary .icon,.btn-primary .fa{color:${p.bt}!important}
-.userinitials,.avatar{background:${p.p2}!important;color:${p.hd}!important}
+.userinitials{background:${p.p2}!important;color:${p.hd}!important}
 img.icon,.icon img{filter:invert(1) brightness(1.6)!important}
 .activityiconcontainer .icon{color:inherit}
 ::selection{background:${p.hd};color:${p.bg}}

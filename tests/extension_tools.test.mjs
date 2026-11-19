@@ -1,0 +1,11 @@
+import { createRequire } from "node:module";
+import assert from "node:assert/strict";
+const t = createRequire(import.meta.url)("../extension/lms-tools.js");
+assert.deepEqual(t.timeLeft(100 + 90000, 100), { late: false, txt: "1d 1h left", urgent: false });
+assert.equal(t.timeLeft(100 + 3600 * 5, 100).urgent, true);
+assert.equal(t.timeLeft(100, 100 + 7300).txt, "overdue 2h 1m");
+assert.equal(t.cmidOf("https://x/mod/assign/view.php?id=123&a=1"), "123");
+assert.equal(t.safeName("a/b:c?.pdf"), "a_b_c_.pdf");
+assert.equal(t.nameFromDisposition('attachment; filename="Lec 1.pdf"'), "Lec 1.pdf");
+assert.equal(t.nameFromUrl("https://x/pluginfile.php/1/Lec%201.pdf"), "Lec 1.pdf");
+console.log("tools ok");

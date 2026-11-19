@@ -1,7 +1,7 @@
 // Run: node tests/extension_theme.test.mjs   (dark theme CSS for Moodle: pure functions of extension/lms-theme.js)
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-const { themeCss, resolve, PALETTES } = createRequire(import.meta.url)("../extension/lms-theme.js");
+const { themeCss, resolve, PALETTES, darkenBg, needsLightText } = createRequire(import.meta.url)("../extension/lms-theme.js");
 
 assert.equal(themeCss("off"), "", "off adds nothing");
 assert.equal(themeCss("bogus"), "", "unknown value adds nothing");
@@ -19,6 +19,18 @@ for (const n of ["cyberpunk", "synthwave", "matrix", "midnight"]) {
   assert.equal(resolve(n), n);
   for (const k of ["bg", "pn", "p2", "tx", "mu", "ln", "ac", "hd", "bt", "btbg", "ok", "bad"]) assert.match(PALETTES[n][k], /^#[0-9a-f]{6}$/i, n + "." + k);
 }
+// catch-all for light backgrounds
+const cy = PALETTES.cyberpunk;
+assert.equal(darkenBg("rgb(255, 255, 255)", cy), "rgb(14,14,22)", "white becomes the panel colour");
+assert.equal(darkenBg("rgb(248, 249, 250)", cy), "rgb(14,14,22)");
+assert.equal(darkenBg("rgb(222, 226, 230)", cy), "rgb(26,26,38)", "light grey becomes the input/hover colour");
+assert.notEqual(darkenBg("rgb(212, 237, 218)", cy), "rgb(14,14,22)", "pale green keeps a greenish tint");
+assert.equal(darkenBg("rgb(14, 14, 22)", cy), null, "already dark: untouched");
+assert.equal(darkenBg("rgba(0, 0, 0, 0)", cy), null, "transparent: untouched");
+assert.equal(darkenBg("rgb(252, 238, 10)", cy), null, "vivid accent colours: untouched");
+assert.equal(needsLightText("rgb(33, 37, 41)", "rgb(14, 14, 22)"), true, "dark text on a dark background");
+assert.equal(needsLightText("rgb(5, 5, 9)", "rgb(252, 238, 10)"), false, "dark text on a bright button stays");
+assert.equal(needsLightText("rgb(233, 247, 250)", "rgb(14, 14, 22)"), false, "light text is fine");
 assert.equal(resolve("dark"), "dark");
 assert.equal(resolve("dim"), "dim");
 assert.equal(resolve("off"), "off");

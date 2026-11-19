@@ -66,7 +66,36 @@ hr,.border,.border-bottom,.border-top{border-color:${p.ln}!important}
 img.icon,.icon img{filter:invert(1) brightness(1.6)!important}
 .activityiconcontainer .icon{color:inherit}
 ::selection{background:${p.hd};color:${p.bg}}
+.tox-edit-area__iframe{filter:invert(.92) hue-rotate(180deg)!important}
 body,button,input,select,textarea{${font}}`;
+  }
+
+  // ---- catch-all for light backgrounds the CSS above does not know about ----
+  const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  function parseRgb(str) {
+    const m = /rgba?\(([^)]+)\)/.exec(str || "");
+    if (!m) return null;
+    const p = m[1].split(/[ ,\/]+/).filter(Boolean).map(parseFloat);
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  // A light, opaque background becomes a dark one of the same family (pale green stays greenish, white becomes the panel colour).
+  function darkenBg(str, p) {
+    const c = parseRgb(str);
+    if (!c || !(c.a >= 0.5) || lum(c.r, c.g, c.b) < 0.55) return null;
+    const pn = hexRgb(p.pn), p2 = hexRgb(p.p2);
+    const sat = Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
+    if (sat > 120) return null; // vivid colours (the accent buttons, status badges) are left as they are
+    let out;
+    if (sat > 15) out = [0, 1, 2].map((i) => Math.round(pn[i] * 0.72 + [c.r, c.g, c.b][i] * 0.28));
+    else out = lum(c.r, c.g, c.b) > 0.93 ? pn : p2;
+    return `rgb(${out[0]},${out[1]},${out[2]})`;
+  }
+  // Dark text is only a problem on a dark background; bright backgrounds (the accent buttons) keep their dark text.
+  function needsLightText(color, bgBehind) {
+    const t = parseRgb(color), b = parseRgb(bgBehind);
+    if (!t || t.a < 0.4 || lum(t.r, t.g, t.b) >= 0.45) return false;
+    return !b || lum(b.r, b.g, b.b) < 0.35;
   }
 
   function themeCss(mode) {
@@ -82,17 +111,63 @@ body,button,input,select,textarea{${font}}`;
     return INVERT[choice] || PALETTES[choice] ? choice : "off";
   }
 
-  if (typeof module !== "undefined") module.exports = { themeCss, resolve, INVERT, PALETTES, NAMES };
+  if (typeof module !== "undefined") module.exports = { themeCss, resolve, INVERT, PALETTES, NAMES, darkenBg, needsLightText, parseRgb };
   if (typeof document === "undefined" || typeof chrome === "undefined" || !chrome.storage) return;
   if (window.top !== window) return;
 
   let choice = "off";
+  const touched = new Set();
+  let observer = null, timer = null, pending = new Set();
+  const SKIP = /^(SCRIPT|STYLE|IMG|SVG|PATH|VIDEO|CANVAS|IFRAME|HEAD|META|LINK|BR|HR|NOSCRIPT)$/i;
+
+  function fixTree(root, p) {
+    const els = [root, ...root.querySelectorAll("*")].filter((e) => e.nodeType === 1 && !SKIP.test(e.tagName) && !e.closest("#lmsg-bell,#lmsg-frame"));
+    for (const e of els) { // pass 1: light backgrounds
+      const fix = darkenBg(getComputedStyle(e).backgroundColor, p);
+      if (fix) { e.style.setProperty("background-color", fix, "important"); touched.add(e); }
+    }
+    for (const e of els) { // pass 2: dark text on what is now a dark page
+      const cs = getComputedStyle(e);
+      if (!needsLightText(cs.color, behind(e))) continue;
+      e.style.setProperty("color", p.tx, "important"); touched.add(e);
+    }
+  }
+  function behind(e) { // first opaque background at or above the element
+    for (let n = e; n && n.nodeType === 1; n = n.parentElement) {
+      const c = parseRgb(getComputedStyle(n).backgroundColor);
+      if (c && c.a >= 0.5) return getComputedStyle(n).backgroundColor;
+    }
+    return null;
+  }
+  function clearFixes() {
+    for (const e of touched) { e.style.removeProperty("background-color"); e.style.removeProperty("color"); }
+    touched.clear();
+  }
+  function watch(p) {
+    if (observer) return;
+    observer = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === "childList") m.addedNodes.forEach((n) => n.nodeType === 1 && pending.add(n));
+        else if (m.target.nodeType === 1) pending.add(m.target);
+      }
+      clearTimeout(timer);
+      timer = setTimeout(() => { const list = [...pending]; pending = new Set(); list.forEach((n) => n.isConnected && fixTree(n, p)); }, 120);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+  }
+  function stopWatching() { if (observer) { observer.disconnect(); observer = null; } clearTimeout(timer); pending = new Set(); }
+
   function apply() {
     let el = document.getElementById(ID);
-    const css = themeCss(resolve(choice));
+    const mode = resolve(choice), css = themeCss(mode);
+    stopWatching(); clearFixes();
     if (!css) { if (el) el.remove(); return; }
     if (!el) { el = document.createElement("style"); el.id = ID; (document.head || document.documentElement).appendChild(el); }
     if (el.textContent !== css) el.textContent = css;
+    const p = PALETTES[mode];
+    if (!p) return; // Dark and Dim flip every colour already
+    const start = () => { fixTree(document.documentElement, p); watch(p); };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true }); else start();
   }
   try { choice = localStorage.getItem(KEY) || "off"; } catch (_) {} // instant, so there is no white flash on load
   apply();

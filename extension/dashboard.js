@@ -64,9 +64,26 @@ function render() {
       return `<div class="card ev"><span class="t">${ic} ${esc(name)}</span><span class="mute">${esc(full(cid))}</span>
         <span class="mute">${word} ${esc(when(t))} · in ${days ? days + " d" : Math.max(1, Math.round((t - now) / 3600)) + " h"}${u ? ` · <a href="${esc(u)}" target="_blank" rel="noopener">Open</a>` : ""}</span></div>`;
     }).join("") : '<div class="card mute">No upcoming deadlines in tracked subjects.</div>';
+  } else if (S.tab === "gpa") {
+    renderGpa(list);
   } else {
     renderGrades(list);
   }
+}
+
+// GPA calculator: one long list. "Fill from my SIS" uses the final grades and subjects the extension already read.
+function renderGpa(list) {
+  const box = document.createElement("div"); list.innerHTML = ""; list.append(box);
+  window.LMSG_GPA_UI.mount(box, {
+    load: async () => (await chrome.storage.local.get("gpaRows")).gpaRows || [],
+    save: (rows) => chrome.storage.local.set({ gpaRows: rows }),
+    sis: async () => {
+      const { sis } = await chrome.storage.local.get("sis");
+      if (!sis || !sis.finals) return { hint: "Log in to the SIS in this browser first; your final grades are read automatically." };
+      const n = Object.keys(sis.finals).length;
+      return { finals: sis.finals, courses: sis.courses, hint: `SIS read ${ago(sis.fullAt)}: ${n} final grades found. Current-term subjects come in empty so you can try grades.` };
+    },
+  });
 }
 
 const ago = (ms) => { const m = Math.round((Date.now() - ms) / 60000); return !ms ? "never" : m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };

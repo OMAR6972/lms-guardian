@@ -26,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      # ref: main = newest saved memory even when this run waited behind another one.
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -34,14 +33,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install tesseract (SIS captcha OCR)
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
       - run: pip install -r requirements.txt
-      - name: Check Moodle and notify
+      - name: Check Moodle and SIS, and notify
         env:
           LMS_USER: ${{ secrets.LMS_USER }}
           LMS_PASS: ${{ secrets.LMS_PASS }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DATA_KEY: ${{ secrets.DATA_KEY }}
+          SIS_USER: ${{ secrets.SIS_USER }}
+          SIS_PASS: ${{ secrets.SIS_PASS }}
+          TWOCAPTCHA_KEY: ${{ secrets.TWOCAPTCHA_KEY }}
           LMS_SELFTEST: ${{ inputs.selftest && 'files' || '' }}
           LMS_SELFTEST_CHANNEL: ${{ inputs.channel }}
         run: python -m lms

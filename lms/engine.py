@@ -13,6 +13,7 @@ from . import diff, snapshot, vault
 from .discord import Discord, DiscordError, valid_webhook
 from .moodle import LoginError, Moodle, MoodleError
 from .telegram import TgError
+from .sis import Sis, SisError
 from .util import NetError, TooBig, chunk_blocks, esc, fmt_delta, fmt_size, fmt_ts, html_to_md, split_course
 
 HISTORY_MAX = 600
@@ -691,9 +692,37 @@ class Engine:
         self.log(f"selftest: {f['name']!r} {fmt_size(f['size'])} downloaded={isinstance(got, bytes)}"
                  + (f" bytes={len(got)}" if isinstance(got, bytes) else f" error={type(got).__name__}") + f" new_downloads={len(self._dl) - sent_before}")
 
-    # ---------- SIS (grades pushed by the browser extension) ----------
+        # ---------- SIS (grades: read by the bot itself, or pushed by the browser extension) ----------
+    SIS_DIRECT_EVERY = 10 * 60  # a full direct read at most every 10 minutes (the bot runs every 2)
+
+    def _sis_direct(self):
+        """Log in to the SIS ourselves and read the marks. Returns a snapshot dict or None on failure."""
+        # SIS login: your own secrets if set, otherwise the same account as Moodle
+        user = os.environ.get("SIS_USER") or os.environ.get("LMS_USER", "")
+        pw = os.environ.get("SIS_PASS") or os.environ.get("LMS_PASS", "")
+        if not user or not pw:
+            return None
+
+        mem = self.st.setdefault("sis_direct", {})
+        if self.now - int(mem.get("at", 0)) < self.SIS_DIRECT_EVERY:
+            return None  # read recently; no need to hammer the SIS
+        try:
+            c = Sis(user, pw, log=self.log, key2captcha=os.environ.get("TWOCAPTCHA_KEY", ""),
+                    cookies=mem.get("cookies"))
+            snap = c.snapshot(self.st.get("sis_profile", ""))
+        except (SisError, Exception) as e:  # noqa: BLE001 - a bad read must never crash the run
+            self.log("sis direct read failed: %s: %s" % (type(e).__name__, e))
+            mem["at"] = self.now
+            return None
+        mem.update({"at": self.now, "cookies": c.cookies})
+        if snap.get("profile"):
+            self.st["sis_profile"] = snap["profile"]  # remembered so later runs can skip the dashboard hunt
+        return snap
+
     def process_sis(self):
-        sis, _ = vault.load(self.sis_path, self.key, None)
+        sis = self._sis_direct()
+        if sis is None:
+            sis, _ = vault.load(self.sis_path, self.key, None)  # extension pushes still work as a fallback
         owner = self.owner()
         if not sis or not owner or not owner.get("active", True) or not self.wants(owner, "sis"):
             return
@@ -701,21 +730,25 @@ class Engine:
         stale_hours = settings.get("sisStaleHours") or SIS_STALE_HOURS
         logged_out = sis.get("status") == "logged_out"
         stale = self.now - int(sis.get("seen", 0)) > stale_hours * 3600
-        # Logged out / silent is the normal state when Chrome is closed, so these warnings are opt-in.
+        # Logged out / silent is the normal state when Chrome is closed and the bot reads by itself,
+        # so these warnings are opt-in (and only about the extension side).
         if not settings.get("sisWarnings"):
             pass
         elif logged_out or stale:
             if not self.st.get("sis_warned"):
-                why = ("your SIS session ended. Log in to the SIS again and the extension resumes by itself."
+                why = ("your SIS session ended. It logs in again by itself at the next check."
                        if logged_out else
-                       f"the extension has not reported for over {stale_hours} hours (browser closed, or SIS session ended).")
-                if self.say_to(owner["id"], f"⚠️ <b>SIS grades are not being checked</b>\n\n{esc(why[0].upper() + why[1:])}"):
+                       "no SIS data has arrived for over %d hours." % stale_hours)
+                if self.say_to(owner["id"], "⚠️ <b>SIS grades are not being checked</b>\n\n%s" % esc(why[0].upper() + why[1:])):
                     self.st["sis_warned"] = True
         elif self.st.get("sis_warned"):
             self.say_to(owner["id"], "✅ <b>SIS grade checks are running again.</b>")
             self.st["sis_warned"] = False
-        if logged_out:
-            return
+        if logged_out or sis.get("status") == "fees":
+            if sis.get("status") == "fees":
+                pass  # fees block: keep what was read; nothing to announce
+            else:
+                return
         old = self.st.get("sis")
         pages = {}
         for key, page in (sis.get("pages") or {}).items():
@@ -729,7 +762,7 @@ class Engine:
             return
         if old is None:
             n = sum(len(p["rows"]) for p in pages.values())
-            if self.say_to(owner["id"], f"🎓 <b>SIS connected.</b>\n\nRecorded your current marks ({n} entries) silently. You'll get a message when a mark is released or changes, while Chrome is open."):
+            if self.say_to(owner["id"], "🎓 <b>SIS connected.</b>\n\nRecorded your current marks (%d entries) silently. You'll get a message when a mark is released or changes." % n):
                 self.st["sis"] = pages
             return
         events = diff.diff_sis(old, pages)
@@ -738,11 +771,12 @@ class Engine:
         merged = dict(old)
         for key, page in pages.items():
             rows = dict((old.get(key) or {}).get("rows", {}))
-            rows.update(page["rows"])  # rows that vanish are kept: a half-loaded page must not erase history
+            rows.update(page["rows"])
             merged[key] = {"title": page["title"], "url": page["url"], "rows": rows}
             if page.get("kind"):
                 merged[key]["kind"] = page["kind"]
         self.st["sis"] = merged
+
 
     # ---------- browser extension feeds ----------
     def build_feed(self, p):

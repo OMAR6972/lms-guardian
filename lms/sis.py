@@ -20,7 +20,7 @@ import urllib.request
 
 BASE = "https://eng.asu.edu.eg"
 UA = "Mozilla/5.0 (LMS-Guardian personal monitor)"
-LOGIN_TRIES = 8        # fresh CAPTCHA per try
+LOGIN_TRIES = 20       # fresh CAPTCHA per try (each is ~2 seconds)
 
 
 class SisError(Exception):
@@ -130,28 +130,29 @@ def _form_fields(html):
 
 # ---------- CAPTCHA solving ----------
 def _solve_ocr(img):
-    """Read the CAPTCHA locally with tesseract: 6 distorted digits on a speckled background.
-    Free. Tries several preprocessing variants and keeps the best digit-only reading of the right length."""
+    """Read the CAPTCHA locally with tesseract: distorted digits + noise lines + speckles.
+    Free. Tries many preprocessing variants and votes on the most frequent digit reading."""
     import pytesseract
-    from PIL import Image, ImageOps
+    from PIL import Image, ImageFilter, ImageOps
 
     im = Image.open(io.BytesIO(img)).convert("L")
     im = im.resize((im.width * 4, im.height * 4), Image.LANCZOS)
+    im = im.filter(ImageFilter.MedianFilter(3))  # scrub the speckle dots
     if sum(im.getdata()) / (im.width * im.height) < 128:  # light text on dark bg: flip
         im = ImageOps.invert(im)
 
-    candidates = []
-    for threshold in (120, 150, 180, 210):
+    votes = {}
+    for threshold in (100, 130, 160, 190, 220):
         bw = im.point(lambda p: 0 if p < threshold else 255)
-        for psm in (7, 6, 8):
+        for psm in (7, 6, 8, 13):
             txt = pytesseract.image_to_string(bw, config="--psm %d -c tessedit_char_whitelist=0123456789" % psm).strip()
             txt = "".join(ch for ch in txt if ch.isdigit())
-            if len(txt) in (5, 6):  # the SIS captcha is ~6 digits
-                candidates.append(txt)
-    if not candidates:
+            if len(txt) >= 5:
+                votes[txt] = votes.get(txt, 0) + 1
+    if not votes:
         return ""
-    # whichever reading appears most often across variants is probably the right one
-    return max(set(candidates), key=candidates.count)
+    return max(votes, key=votes.get)
+
 
 
 
@@ -192,7 +193,7 @@ class Sis:
         return status, final, raw.decode("utf-8", "replace")
 
     def _login(self):
-        for _ in range(LOGIN_TRIES):
+        for attempt in range(1, LOGIN_TRIES + 1):
             _s, _u, form_html = self._get(BASE + "/login")
             if not looks_logged_out(BASE + "/login", form_html):
                 return  # session cookie still valid
@@ -201,30 +202,32 @@ class Sis:
             if post.startswith("/"):
                 post = BASE + post
             fields = _form_fields(form_html)
-            answer = ""
             img_m = re.search(r'src="([^"]*captcha[^"]*)"', form_html or "")
-            if img_m:
-                src = img_m.group(1)
-                if src.startswith("/"):
-                    src = BASE + src
-                src += ("&" if "?" in src else "?") + str(random.random())  # never the cached image
-                _cs, _cu, img = self._req(src)
-                try:
-                    answer = _solve_ocr(img)
-                except Exception as e:  # tesseract/PIL problem: just try a fresh captcha
-                    self.log("captcha solve failed: %s" % e)
-                    continue
+            if not img_m:
+                raise SisError("no captcha image found on the login page (form had: %s)" % ", ".join(fields))
+            src = img_m.group(1)
+            if src.startswith("/"):
+                src = BASE + src
+            src += ("&" if "?" in src else "?") + str(random.random())  # never the cached image
+            _cs, _cu, img = self._req(src)
+            try:
+                answer = _solve_ocr(img)
+            except Exception as e:  # tesseract/PIL problem: fresh captcha and try again
+                self.log("sis login: captcha solve crashed: %s" % e)
+                continue
+            self.log("sis login: attempt %d, captcha reads %r" % (attempt, answer or "(nothing)"))
             if not answer:
                 continue
             fields.update({"email": self.email, "password": self.password, "captcha": answer})
-            _s, final, page = self._get(post) if False else (None, None, None)
             _st, final, raw = self._req(post, data=fields)
             page = raw.decode("utf-8", "replace")
             if not looks_logged_out(final, page):
-                self.log("sis: logged in (captcha solved)")
+                self.log("sis: logged in (captcha solved on attempt %d)" % attempt)
                 return
-            self.log("sis: captcha or credentials rejected; retrying with a fresh one")
+            grr = re.search(r"(?:invalid|wrong|incorrect|not correct)[^<]{0,80}", page, re.I)
+            self.log("sis login: rejected (attempt %d%s)" % (attempt, (" · page says: " + grr.group(0)) if grr else ""))
         raise SisError("could not log in to the SIS after %d captcha attempts" % LOGIN_TRIES)
+
 
     def snapshot(self, known_profile=""):
         """The same shape the extension writes to sis.enc: {v, seen, status, profile, pages}."""
